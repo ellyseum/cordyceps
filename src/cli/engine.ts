@@ -18,7 +18,7 @@ import { generateToken } from "../transport/auth.js";
 import { writeInstance, removeInstance } from "../daemon/instances.js";
 import { discoverBuiltins, loadAll, destroyPlugin, type LoadedPlugin } from "../plugins/loader.js";
 
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 
 export interface EngineOpts {
   port?: number;

@@ -40,7 +40,8 @@ export interface LoaderOpts {
 export async function discoverBuiltins(): Promise<CordycepsPlugin[]> {
   const audit = await import("./builtin/audit/index.js");
   const runtimeExec = await import("./builtin/runtime-exec/index.js");
-  return [audit.default, runtimeExec.default];
+  const runtimeServerWs = await import("./builtin/runtime-server-ws/index.js");
+  return [audit.default, runtimeExec.default, runtimeServerWs.default];
 }
 
 /**
