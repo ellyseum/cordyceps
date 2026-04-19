@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.1.0 — pre-release.
+**Status:** v0.1.2 — pre-release.
 
 ## What it is
 
@@ -73,6 +73,19 @@ For convenience, link `bin/cordy` onto your PATH or use `./bin/cordy` directly.
 ./bin/cordy --ephemeral doctor
 ./bin/cordy --ephemeral spawn claude --name once
 ```
+
+### Capturing PTY output (for fixture generation)
+
+When a driver's parser drifts against a new CLI release, capture the raw PTY stream and feed it back as a regression fixture:
+
+```bash
+./bin/cordy spawn claude --name drift
+./bin/cordy capture drift --duration 30 &
+./bin/cordy send drift "small repro"
+# → .cordyceps/captures/drift-<ts>.jsonl  (meta + output + state + message lines)
+```
+
+Each line is one event. The `meta` header records the driver id, driver version, CLI version, and the driver's tested range (`supportedVersions`). The file mode is `0600`; the directory self-ignores via `.cordyceps/.gitignore`.
 
 ## Architecture
 

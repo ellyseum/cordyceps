@@ -19,6 +19,7 @@ import { runBus } from "./commands/bus.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runDriversCmd } from "./commands/drivers.js";
 import { runEphemeral } from "./commands/ephemeral.js";
+import { runCapture } from "./commands/capture.js";
 
 const HELP = `cordy — local-first agent harness CLI
 
@@ -43,6 +44,7 @@ Diagnostics:
   cordy doctor
   cordy bus [prefix]
   cordy drivers
+  cordy capture <id> [--out PATH] [--duration S]   Record PTY output as JSONL fixture
 
 Ephemeral:
   cordy --ephemeral <command...>      Spin up a transient daemon for one command
@@ -90,6 +92,8 @@ async function main(): Promise<void> {
       process.exit(await runDoctor(rest));
     case "drivers":
       process.exit(await runDriversCmd(rest));
+    case "capture":
+      process.exit(await runCapture(rest));
     default:
       process.stderr.write(`Unknown command: ${cmd}\n\n${HELP}`);
       process.exit(1);
