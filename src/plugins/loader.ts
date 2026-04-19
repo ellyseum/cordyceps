@@ -43,7 +43,15 @@ export async function discoverBuiltins(): Promise<CordycepsPlugin[]> {
   const runtimeServerWs = await import("./builtin/runtime-server-ws/index.js");
   const runtimeServerHttp = await import("./builtin/runtime-server-http/index.js");
   const manager = await import("./builtin/manager/index.js");
-  return [audit.default, runtimeExec.default, runtimeServerWs.default, runtimeServerHttp.default, manager.default];
+  const peer = await import("./builtin/peer/index.js");
+  return [
+    audit.default,
+    runtimeExec.default,
+    runtimeServerWs.default,
+    runtimeServerHttp.default,
+    manager.default,
+    peer.default,
+  ];
 }
 
 /**

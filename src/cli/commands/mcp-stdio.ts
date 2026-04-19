@@ -19,7 +19,7 @@ import { createInterface } from "node:readline";
 import { connect, type RpcClient } from "../client.js";
 
 const MCP_PROTOCOL_VERSION = "2024-11-05";
-const SERVER_VERSION = "0.3.2";
+const SERVER_VERSION = "0.3.3";
 
 interface McpRequest {
   jsonrpc: "2.0";
@@ -150,6 +150,35 @@ const TOOLS: McpTool[] = [
       required: ["prefix"],
     },
     _rpc: "bus.getByPrefix",
+  },
+  {
+    name: "peer_ask",
+    description: "Agent `from` asks agent `to` a question and returns the reply. Blocks up to timeoutMs (default 120s).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: { type: "string", description: "Sender agent id" },
+        to: { type: "string", description: "Recipient agent id" },
+        text: { type: "string", description: "Question text" },
+        timeoutMs: { type: "number", description: "Max wait (default 120_000)" },
+      },
+      required: ["from", "to", "text"],
+    },
+    _rpc: "peer.ask",
+  },
+  {
+    name: "peer_tell",
+    description: "Agent `from` notifies agent `to` — fire-and-forget, no reply expected.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: { type: "string" },
+        to: { type: "string" },
+        text: { type: "string" },
+      },
+      required: ["from", "to", "text"],
+    },
+    _rpc: "peer.tell",
   },
 ];
 
