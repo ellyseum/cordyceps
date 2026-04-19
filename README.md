@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.4.4 — pre-release.
+**Status:** v0.4.5 — pre-release.
 
 ## What it is
 
@@ -79,9 +79,14 @@ For convenience, link `bin/cordy` onto your PATH or use `./bin/cordy` directly.
 ```bash
 cordy council review src/core/bus.ts
 cordy council review src/core/bus.ts --panel claude,codex,gemini --chair codex --json
+cordy council diff                              # uncommitted changes vs HEAD
+cordy council diff --staged                     # only staged changes
+cordy council diff main..feature --scope src/   # branch comparison, scoped
 ```
 
-Spawns N reviewers from different driver families in parallel, each reviews the file in a silo (no reviewer sees another's output), then a chair agent synthesizes the findings into a prioritized markdown verdict. Default panel is `[claude, codex, gemini]`, default chair is `codex` (exec-mode output is cleaner than PTY synthesis tails).
+Spawns N reviewers from different driver families in parallel, each reviews in a silo (no reviewer sees another's output), then a chair agent synthesizes the findings into a prioritized markdown verdict. Default panel is `[claude, codex, gemini]`, default chair is `codex` (exec-mode output is cleaner than PTY synthesis tails).
+
+`review` operates on a whole file; `diff` reviews the changes shown by `git diff` (with `--no-ext-diff --no-textconv` for hostile-repo safety). Files/diffs larger than ~30KB are auto-chunked by line boundary and every (chunk × reviewer) pair is run in parallel; the chair dedupes across chunks.
 
 The whole point is heterogeneous training lineages — intra-family ensembles correlate their blind spots; inter-family councils don't.
 

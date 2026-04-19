@@ -58,8 +58,10 @@ Manager:
                                       Spawn a cordy-manager agent wired with MCP delegation
 
 Council:
-  cordy council review <path> [--panel claude,codex,gemini] [--chair claude] [--timeout N] [--json]
-                                      Multi-family code review with chair synthesis
+  cordy council review <path> [--panel ...] [--chair ...] [--timeout N] [--no-chunk] [--json]
+                                      Review a single file
+  cordy council diff [base] [--staged] [--scope PATH]
+                                      Review uncommitted/staged changes (default base: HEAD)
 
 Ephemeral:
   cordy --ephemeral <command...>      Spin up a transient daemon for one command
