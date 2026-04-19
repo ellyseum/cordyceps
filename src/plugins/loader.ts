@@ -36,10 +36,11 @@ export interface LoaderOpts {
   flagOverrides?: Record<string, Record<string, unknown>>;
 }
 
-/** Discover the built-in plugin set. v1 ships only `audit`. */
+/** Discover the built-in plugin set. */
 export async function discoverBuiltins(): Promise<CordycepsPlugin[]> {
   const audit = await import("./builtin/audit/index.js");
-  return [audit.default];
+  const runtimeExec = await import("./builtin/runtime-exec/index.js");
+  return [audit.default, runtimeExec.default];
 }
 
 /**
