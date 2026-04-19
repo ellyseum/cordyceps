@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.3.0 — pre-release.
+**Status:** v0.3.1 — pre-release.
 
 ## What it is
 
@@ -73,6 +73,21 @@ For convenience, link `bin/cordy` onto your PATH or use `./bin/cordy` directly.
 ./bin/cordy --ephemeral doctor
 ./bin/cordy --ephemeral spawn claude --name once
 ```
+
+### MCP bridge — expose cordy to another agent
+
+A Claude Code, Codex, or any MCP client can treat cordy's control plane as a tool surface. Add `cordy mcp-stdio` to its MCP config:
+
+```jsonc
+// claude mcp-config entry
+{
+  "mcpServers": {
+    "cordy": { "command": "cordy", "args": ["mcp-stdio"] }
+  }
+}
+```
+
+Now the spawned agent can call `cordy_agents_spawn`, `cordy_agents_submit`, `cordy_drivers_list`, etc. — i.e. it has delegated authority to spawn peer agents and drive them. This is the substrate for manager-agent patterns.
 
 ### Capturing PTY output (for fixture generation)
 
