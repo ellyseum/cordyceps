@@ -19,7 +19,7 @@ import { createInterface } from "node:readline";
 import { connect, type RpcClient } from "../client.js";
 
 const MCP_PROTOCOL_VERSION = "2024-11-05";
-const SERVER_VERSION = "0.3.3";
+const SERVER_VERSION = "0.3.4";
 
 interface McpRequest {
   jsonrpc: "2.0";
@@ -179,6 +179,12 @@ const TOOLS: McpTool[] = [
       required: ["from", "to", "text"],
     },
     _rpc: "peer.tell",
+  },
+  {
+    name: "daemons_list",
+    description: "List all cordy daemons running on this host (for cross-daemon coordination). Tokens are NOT returned.",
+    inputSchema: { type: "object", properties: {} },
+    _rpc: "daemons.list",
   },
 ];
 

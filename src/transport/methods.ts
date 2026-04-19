@@ -11,6 +11,7 @@ import type { ServiceBus } from "../core/bus.js";
 import type { Logger } from "../core/logger.js";
 import type { RpcDispatcher } from "./rpc.js";
 import { CordycepsError, JsonRpcMethodError } from "./types.js";
+import { listInstances } from "../daemon/instances.js";
 
 export interface CoreMethodsContext {
   manager: AgentManager;
@@ -218,6 +219,21 @@ export function registerCoreMethods(rpc: RpcDispatcher, ctx: CoreMethodsContext)
       out[k] = v;
     }
     return out;
+  });
+
+  // ── daemons.* (peer-daemon discovery) ────────────────────────────────
+  rpc.register("daemons.list", async () => {
+    // Don't leak tokens over the wire — other daemons each have their own
+    // auth and the caller shouldn't impersonate them on behalf of someone
+    // who just queried for presence.
+    return listInstances().map((r) => ({
+      pid: r.pid,
+      url: r.url,
+      port: r.port,
+      startedAt: r.startedAt,
+      version: r.version,
+      self: r.pid === process.pid,
+    }));
   });
 
   // ── notifications.* ──────────────────────────────────────────────────
