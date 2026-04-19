@@ -153,6 +153,8 @@ export interface ParserEvent {
 export interface ControlContext {
   agentId: string;
   state: AgentState;
+  /** The profile this agent was spawned with — drivers read per-agent config here (model, temperature, etc.) */
+  profile: DriverProfile;
   bus: ServiceBus;
   /** Low-level write — for PTY drivers this is raw bytes/keystrokes */
   write(data: string): void;

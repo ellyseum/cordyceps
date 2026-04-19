@@ -324,6 +324,7 @@ export class ServerHttpAgentController extends EventEmitter implements AgentRunt
     return {
       agentId: this.id,
       state: this._state,
+      profile: this.profile,
       bus: this.bus,
       write: (data: string) => this.rawWrite(data),
     };

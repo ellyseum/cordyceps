@@ -275,6 +275,7 @@ export class PtyAgentController extends EventEmitter implements AgentRuntime {
     return {
       agentId: this.id,
       state: this._state,
+      profile: this.profile,
       bus: this.bus,
       write: (data: string) => this.pty.write(data),
     };
