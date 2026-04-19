@@ -11,9 +11,13 @@ import { parsePanelArg, parseReviewerSpec } from "../../plugins/builtin/council/
 interface CouncilResult {
   target: string;
   panel: Array<{ driver: string; profile?: Record<string, unknown> }>;
+  chunks?: number;
   reviews: Array<{
     name: string;
     driver: string;
+    chunkIndex?: number;
+    chunkStartLine?: number;
+    chunkEndLine?: number;
     findings?: unknown[];
     rawText?: string;
     error?: string;
@@ -40,6 +44,7 @@ export async function runCouncil(args: string[]): Promise<number> {
   let chairArg: string | undefined;
   let timeoutMs: number | undefined;
   let asJson = false;
+  let noChunk = false;
 
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
@@ -47,6 +52,7 @@ export async function runCouncil(args: string[]): Promise<number> {
     else if (a === "--chair" && rest[i + 1]) { chairArg = rest[++i]; }
     else if (a === "--timeout" && rest[i + 1]) { timeoutMs = parseInt(rest[++i], 10) * 1000; }
     else if (a === "--json") { asJson = true; }
+    else if (a === "--no-chunk") { noChunk = true; }
     else if (!path) { path = a; }
   }
 
@@ -70,17 +76,21 @@ export async function runCouncil(args: string[]): Promise<number> {
 
     const result = await client.call<CouncilResult>(
       "council.review",
-      { path, panel, chair, timeoutMs },
-      (timeoutMs ?? 180_000) * 2 + 60_000, // generous RPC timeout beyond the per-reviewer submit timeout
+      { path, panel, chair, timeoutMs, noChunk },
+      (timeoutMs ?? 180_000) * 4 + 120_000, // chunking can multiply total wall time
     );
 
     if (asJson) {
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     } else {
-      process.stderr.write(`\n--- Reviewer summary (${result.reviews.filter((r) => !r.error).length}/${result.reviews.length} succeeded, ${result.durationMs}ms) ---\n`);
+      const chunkNote = (result.chunks ?? 1) > 1 ? ` across ${result.chunks} chunks` : "";
+      process.stderr.write(`\n--- Reviewer summary (${result.reviews.filter((r) => !r.error).length}/${result.reviews.length} succeeded${chunkNote}, ${result.durationMs}ms) ---\n`);
       for (const r of result.reviews) {
+        const chunkTag = r.chunkIndex !== undefined
+          ? ` [c${r.chunkIndex + 1} L${r.chunkStartLine}-${r.chunkEndLine}]`
+          : "";
         const status = r.error ? `ERROR: ${r.error}` : `${(r.findings ?? []).length} findings`;
-        process.stderr.write(`  ${r.name.padEnd(40)} ${status}\n`);
+        process.stderr.write(`  ${(r.name + chunkTag).padEnd(60)} ${status}\n`);
       }
       process.stderr.write(`\n--- Chair synthesis ---\n`);
       process.stdout.write(result.synthesis + "\n");
