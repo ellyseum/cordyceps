@@ -22,6 +22,7 @@ import { runEphemeral } from "./commands/ephemeral.js";
 import { runCapture } from "./commands/capture.js";
 import { runMcpStdio } from "./commands/mcp-stdio.js";
 import { runManager } from "./commands/manager.js";
+import { runCouncil } from "./commands/council.js";
 
 const HELP = `cordy — local-first agent harness CLI
 
@@ -55,6 +56,10 @@ MCP:
 Manager:
   cordy manager [--driver X] [--model M] <task...>
                                       Spawn a cordy-manager agent wired with MCP delegation
+
+Council:
+  cordy council review <path> [--panel claude,codex,gemini] [--chair claude] [--timeout N] [--json]
+                                      Multi-family code review with chair synthesis
 
 Ephemeral:
   cordy --ephemeral <command...>      Spin up a transient daemon for one command
@@ -108,6 +113,8 @@ async function main(): Promise<void> {
       process.exit(await runMcpStdio(rest));
     case "manager":
       process.exit(await runManager(rest));
+    case "council":
+      process.exit(await runCouncil(rest));
     default:
       process.stderr.write(`Unknown command: ${cmd}\n\n${HELP}`);
       process.exit(1);

@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.4.0 — pre-release.
+**Status:** v0.4.1 — pre-release.
 
 ## What it is
 
@@ -73,6 +73,17 @@ For convenience, link `bin/cordy` onto your PATH or use `./bin/cordy` directly.
 ./bin/cordy --ephemeral doctor
 ./bin/cordy --ephemeral spawn claude --name once
 ```
+
+### Code review council — multi-family reviewers with a chair
+
+```bash
+cordy council review src/core/bus.ts
+cordy council review src/core/bus.ts --panel claude,codex,gemini --chair codex --json
+```
+
+Spawns N reviewers from different driver families in parallel, each reviews the file in a silo (no reviewer sees another's output), then a chair agent synthesizes the findings into a prioritized markdown verdict. Default panel is `[claude, codex, gemini]`, default chair is `codex` (exec-mode output is cleaner than PTY synthesis tails).
+
+The whole point is heterogeneous training lineages — intra-family ensembles correlate their blind spots; inter-family councils don't.
 
 ### Manager agent — delegate tasks to a fleet
 

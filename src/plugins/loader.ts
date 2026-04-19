@@ -44,6 +44,7 @@ export async function discoverBuiltins(): Promise<CordycepsPlugin[]> {
   const runtimeServerHttp = await import("./builtin/runtime-server-http/index.js");
   const manager = await import("./builtin/manager/index.js");
   const peer = await import("./builtin/peer/index.js");
+  const council = await import("./builtin/council/index.js");
   return [
     audit.default,
     runtimeExec.default,
@@ -51,6 +52,7 @@ export async function discoverBuiltins(): Promise<CordycepsPlugin[]> {
     runtimeServerHttp.default,
     manager.default,
     peer.default,
+    council.default,
   ];
 }
 
