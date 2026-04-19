@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.2.5 — pre-release.
+**Status:** v0.3.0 — pre-release.
 
 ## What it is
 
@@ -151,14 +151,23 @@ Default subscriptions on connect: `agent.created`, `agent.state`, `agent.message
 
 Drivers declare modes (`pty`, `exec`, `server-ws`, `server-http`). The `AgentManager` has a runtime factory registry — runtimes for each mode are added by plugins via `manager.registerRuntime(mode, factory)` without touching core. Adding a new CLI family is a driver plus (if needed) a runtime plugin; nothing in the bus, plugin API, transport, or existing drivers has to change.
 
-The Claude driver lives at `src/drivers/claude/`:
+Drivers shipped in v0.3.0:
+
+| Driver | Modes | Notes |
+|--------|-------|-------|
+| `claude-code` | `pty` | Interactive Claude Code TUI, full control (approve/reject/mode-switch) |
+| `codex` | `exec` | `codex exec --json --skip-git-repo-check` |
+| `gemini` | `exec` | `gemini -p … --output-format stream-json`; needs `GEMINI_API_KEY` in daemon env |
+| `ollama` | `server-http` | Streams NDJSON from `/api/generate`; needs local daemon (`ollama serve`) |
+
+The Claude driver at `src/drivers/claude/` is the exemplar for PTY-backed drivers:
 - `driver.ts` — `claude --bare`, `--session-id <uuid>`, `--permission-mode <mode>`, etc.
 - `parser.ts` — glyph-based state machine (`●` message, `⎿` result, spinner family, `⏵`/`⏸` mode)
 - `control.ts` — `submit`/`interrupt`/`approve`/`reject`/`switchModel`/`switchMode`
 - `session.ts` — fresh UUID per agent for `--session-id`; optional `CLAUDE_CONFIG_DIR` sandbox via `profile.isolateConfig`
 - `tui.ts` — key sequences and patterns
 
-When Claude Code's TUI changes, the fix lives here.
+When a CLI's output format changes, the fix lives in its driver directory (parser, control, or `tui.ts`). `cordy capture` + the fixture-replay harness (`test/fixtures/replay.ts`) catch drift in CI.
 
 ## Persistence + security
 
