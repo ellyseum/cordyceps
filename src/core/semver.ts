@@ -18,7 +18,10 @@ export interface ParsedVersion {
 }
 
 export function parseVersion(v: string): ParsedVersion | null {
-  const m = v.match(/^(\d+)\.(\d+)\.(\d+)/);
+  // Anchored on both ends; optional pre-release (`-rc.1`, `-beta2`) and
+  // build-metadata (`+sha.abc`) suffixes are allowed but ignored.
+  // Without the `$` anchor, `2.1.114junk` was being accepted (council flagged).
+  const m = v.match(/^(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/);
   if (!m) return null;
   return { major: parseInt(m[1], 10), minor: parseInt(m[2], 10), patch: parseInt(m[3], 10) };
 }
@@ -39,8 +42,12 @@ export function satisfies(version: string, range: string): boolean {
   if (!v) return false;
 
   const terms = range.trim().split(/\s+/).filter(Boolean);
+  // Empty/whitespace-only range used to satisfy everything (council flagged).
+  // Treat as malformed — callers who want "any" should pass undefined to gradeCompat.
+  if (terms.length === 0) return false;
   for (const term of terms) {
-    const m = term.match(/^(>=|<=|>|<|=)?(\d+\.\d+\.\d+.*)$/);
+    // Term regex is anchored on both ends; no trailing slop like ">=1.2.3xxx".
+    const m = term.match(/^(>=|<=|>|<|=)?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/);
     if (!m) return false;
     const op = m[1] || "=";
     const target = parseVersion(m[2]);
@@ -66,5 +73,8 @@ export function gradeCompat(
 ): "supported" | "untested" | "unsupported" | "any" {
   if (!supportedRange) return "any";
   if (!detectedVersion) return "untested";
-  return satisfies(detectedVersion, supportedRange) ? "supported" : "untested";
+  // If we have both a detected version AND a declared range, a mismatch is
+  // *unsupported*, not untested. Previously returned "untested" regardless
+  // (council flagged: made the "unsupported" return path unreachable).
+  return satisfies(detectedVersion, supportedRange) ? "supported" : "unsupported";
 }

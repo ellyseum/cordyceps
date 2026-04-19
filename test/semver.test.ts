@@ -13,6 +13,15 @@ describe("semver", () => {
       expect(parseVersion("not-a-version")).toBeNull();
       expect(parseVersion("2.1")).toBeNull();
     });
+    it("rejects trailing garbage (regression: council 2026-04-19)", () => {
+      expect(parseVersion("2.1.114junk")).toBeNull();
+      expect(parseVersion("2.1.114.0")).toBeNull();
+      expect(parseVersion("2.1.114 extra")).toBeNull();
+    });
+    it("still accepts build/prerelease suffixes", () => {
+      expect(parseVersion("1.2.3-rc.1")).toEqual({ major: 1, minor: 2, patch: 3 });
+      expect(parseVersion("1.2.3+sha.abc")).toEqual({ major: 1, minor: 2, patch: 3 });
+    });
   });
 
   describe("satisfies", () => {
@@ -43,6 +52,15 @@ describe("semver", () => {
     it("returns false on malformed range", () => {
       expect(satisfies("2.1.114", "bogus")).toBe(false);
     });
+    it("whitespace-only range is malformed, not match-all (regression: council 2026-04-19)", () => {
+      expect(satisfies("2.1.114", "")).toBe(false);
+      expect(satisfies("2.1.114", "   ")).toBe(false);
+      expect(satisfies("2.1.114", "\t\n")).toBe(false);
+    });
+    it("rejects range terms with trailing garbage (regression: council 2026-04-19)", () => {
+      expect(satisfies("2.1.114", ">=1.0.0xxx")).toBe(false);
+      expect(satisfies("2.1.114", ">=1.0.0 garbage")).toBe(false);
+    });
   });
 
   describe("gradeCompat", () => {
@@ -55,8 +73,13 @@ describe("semver", () => {
     it("'supported' when in range", () => {
       expect(gradeCompat("2.1.114", ">=2.1.100 <2.2.0")).toBe("supported");
     });
-    it("'untested' when out of range", () => {
-      expect(gradeCompat("2.2.0", ">=2.1.100 <2.2.0")).toBe("untested");
+    it("'unsupported' when version is known and out of range (regression: council 2026-04-19)", () => {
+      // Previously returned "untested" — the "unsupported" branch was unreachable.
+      expect(gradeCompat("2.2.0", ">=2.1.100 <2.2.0")).toBe("unsupported");
+      expect(gradeCompat("1.0.0", ">=2.0.0")).toBe("unsupported");
+    });
+    it("'untested' kept for no-version case only", () => {
+      expect(gradeCompat(undefined, ">=2.1.100 <2.2.0")).toBe("untested");
     });
   });
 });
