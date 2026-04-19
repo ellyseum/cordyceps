@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import { freshSessionId, isolateClaudeConfig } from "./session.js";
 import { ClaudeParser } from "./parser.js";
 import { ClaudeControl } from "./control.js";
+import { gradeCompat } from "../../core/semver.js";
 import type { Driver, DriverMode, DriverProbe, DriverProfile, SpawnSpec } from "../api.js";
 
 export interface ClaudeProfile extends DriverProfile {
@@ -58,6 +59,8 @@ export class ClaudeDriver implements Driver {
   version = "0.1.0";
   aliases = ["claude"];
   modes: DriverMode[] = ["pty"];
+  /** CLI versions we've tested against + keep fixtures for. */
+  supportedVersions = ">=2.1.100 <2.2.0";
 
   parser = new ClaudeParser();
   control = new ClaudeControl();
@@ -95,6 +98,14 @@ export class ClaudeDriver implements Driver {
       warnings.push("could not parse `claude --help` for capability detection");
     }
 
+    const compat = gradeCompat(version, this.supportedVersions);
+    if (compat === "untested" && version) {
+      warnings.push(
+        `Claude Code ${version} is outside the tested range (${this.supportedVersions}). ` +
+        `Parser drift is possible; run \`cordy capture\` if you hit issues.`,
+      );
+    }
+
     return {
       available: true,
       version,
@@ -102,6 +113,7 @@ export class ClaudeDriver implements Driver {
       capabilities,
       warnings,
       supportedModes: ["pty"],
+      compat,
     };
   }
 

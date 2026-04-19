@@ -182,6 +182,7 @@ export function registerCoreMethods(rpc: RpcDispatcher, ctx: CoreMethodsContext)
       version: d.version,
       aliases: d.aliases ?? [],
       modes: d.modes,
+      supportedVersions: d.supportedVersions ?? null,
       probe: probes[d.id],
     }));
   });
@@ -199,6 +200,7 @@ export function registerCoreMethods(rpc: RpcDispatcher, ctx: CoreMethodsContext)
       version: driver.version,
       aliases: driver.aliases ?? [],
       modes: driver.modes,
+      supportedVersions: driver.supportedVersions ?? null,
       probe,
     };
   });

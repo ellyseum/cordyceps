@@ -26,6 +26,13 @@ export interface Driver {
   aliases?: string[];
   /** Modes this driver can build, in order of preference */
   modes: DriverMode[];
+  /**
+   * Supported CLI version range — npm-style semver expression evaluated by the
+   * probe. Values inside this range are `supported`; outside it are `untested`
+   * (the driver will still try to work; users get a warning). Omit to accept any.
+   * Example: ">=2.1.100 <2.2.0"
+   */
+  supportedVersions?: string;
 
   /** Is this CLI installed + usable here? */
   probe(): Promise<DriverProbe>;
@@ -58,6 +65,14 @@ export interface DriverProbe {
   warnings: string[];
   /** Modes actually usable on this machine (may be narrower than Driver.modes) */
   supportedModes: DriverMode[];
+  /**
+   * Compatibility of the detected version against `Driver.supportedVersions`:
+   *   - "supported"   — in range, exercised in CI
+   *   - "untested"    — out of range (or no version detected), may work but unverified
+   *   - "unsupported" — known-broken range (set by driver when it needs to harden)
+   *   - "any"         — driver doesn't declare a range
+   */
+  compat?: "supported" | "untested" | "unsupported" | "any";
 }
 
 export interface DriverProfile {
