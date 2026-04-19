@@ -40,15 +40,53 @@ export async function runManager(args: string[]): Promise<number> {
     });
     process.stdout.write(`Manager agent: ${id}\n\n`);
 
-    // Stream message + exited events so the user sees progress live.
-    await client.subscribe(["agent.message", "agent.exited"]);
+    // Stream message + state + exited events so the user sees progress live
+    // and we can return as soon as the task is done (without killing the
+    // agent's PTY — future multi-turn use cases will want it alive).
+    await client.subscribe(["agent.message", "agent.state", "agent.exited"]);
 
     let exited = false;
+    let taskDone = false;
+    let sawBusy = false;
+    let gotMessage = false;
+    let currentStatus = "unknown";
+    let lastActivityAt = Date.now();
+    let lastPrinted = "";        // dedup: the exact text we last printed
+    let lastPrintedAt = 0;
+
     client.on("agent.message", (params) => {
-      const p = params as { agentId: string; message: { text: string } };
+      const p = params as { agentId: string; message: { text: string; ts?: string } };
       if (p.agentId !== id) return;
-      process.stdout.write(`\n[${id}] ${p.message.text}\n`);
+      const text = p.message.text;
+      // Dedup against the last-printed text within a short window — the Claude
+      // PTY parser occasionally emits the same message twice under heavy
+      // status-redraw pressure. Rather than guard with (text, ts), which
+      // leaks through because timestamps differ, key on text with a short
+      // collision window so genuinely-repeat-questions like "4. 4." still land.
+      const now = Date.now();
+      if (text === lastPrinted && now - lastPrintedAt < 5_000) return;
+      lastPrinted = text;
+      lastPrintedAt = now;
+      gotMessage = true;
+      lastActivityAt = now;
+      process.stdout.write(`\n[${id}] ${text}\n`);
+      // If status is already idle when the message lands (fast response, no
+      // spinner), flag done right here — no state transition will follow.
+      if (currentStatus === "idle") taskDone = true;
     });
+
+    client.on("agent.state", (params) => {
+      const p = params as { agentId: string; state: { status: string } };
+      if (p.agentId !== id) return;
+      currentStatus = p.state.status;
+      if (p.state.status === "busy") sawBusy = true;
+      // Primary signal: busy→idle after a message landed
+      if (sawBusy && p.state.status === "idle") taskDone = true;
+      // Fallback: fast replies can skip the spinner entirely (no busy state
+      // ever fires). Treat "any message observed + currently idle" as done.
+      if (gotMessage && p.state.status === "idle") taskDone = true;
+    });
+
     client.on("agent.exited", (params) => {
       const p = params as { agentId: string; code: number };
       if (p.agentId !== id) return;
@@ -63,11 +101,18 @@ export async function runManager(args: string[]): Promise<number> {
     };
     process.on("SIGINT", onSig);
 
-    // Block until agent exits. No hard timeout — manager sessions can be long.
-    while (!exited) {
-      await new Promise((r) => setTimeout(r, 500));
+    // Return when the task is done (busy→idle) OR the agent exits. We leave
+    // the manager agent alive by default — users can chain more work against
+    // the same session via `cordy send ${id} "..."`. `cordy kill ${id}` tears
+    // it down explicitly.
+    while (!taskDone && !exited) {
+      await new Promise((r) => setTimeout(r, 250));
     }
     process.off("SIGINT", onSig);
+
+    if (taskDone && !exited) {
+      process.stdout.write(`\n[${id}] task complete — agent still alive. Use \`cordy send ${id} "..."\` to continue, \`cordy kill ${id}\` to tear down.\n`);
+    }
 
     return 0;
   } finally {

@@ -93,11 +93,15 @@ export class ClaudeParser implements DriverParser {
     if (!clean) {
       if (this.scratch.capturingMessage && this.scratch.messageBuf.trim()) {
         const text = this.scratch.messageBuf.trim();
+        this.scratch.capturingMessage = false;
+        this.scratch.messageBuf = "";
+        // Dedup against what we've already published (4d-polish).
+        if (text === state.lastMessage) {
+          return { state, events, messages };
+        }
         const next: AgentState = { ...state, lastMessage: text };
         messages.push({ text, ts: new Date().toISOString() });
         events.push({ kind: "message", data: { text } });
-        this.scratch.capturingMessage = false;
-        this.scratch.messageBuf = "";
         return { state: next, events, messages };
       }
       return { state, events, messages };
@@ -232,17 +236,9 @@ export class ClaudeParser implements DriverParser {
     messages: AssistantMessage[],
   ): boolean {
     if (MSG_START_RE.test(clean)) {
-      // Finalize previous message if we were capturing
-      if (this.scratch.capturingMessage && this.scratch.messageBuf.trim()) {
-        const text = this.scratch.messageBuf.trim();
-        next.lastMessage = text;
-        messages.push({ text, ts: new Date().toISOString() });
-        events.push({ kind: "message", data: { text } });
-      }
-      this.scratch.capturingMessage = true;
-      // Extract text from ● up to the first status-frame terminator.
+      // Extract text after the ● marker, up to the first status-frame terminator.
       // Claude re-renders its status line (spinner + mode) every ~100ms in the
-      // same stream, so the message chunk often looks like:
+      // same stream, so the chunk often looks like:
       //   "● BANANA-OK   \r✢ Architecting…   \r   ⏵⏵ auto mode ..."
       // We want just "BANANA-OK". Terminators: carriage return (\r), or any
       // status/result/mode glyph (⎿ ✢ ✶ etc., ⏵ ⏸).
@@ -251,19 +247,36 @@ export class ClaudeParser implements DriverParser {
         /^([^\r\u23BF\u23F5\u23F8\u2722\u2736\u273D\u273B\u2726\u2727\u2723\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F]*)/,
       );
       const firstText = (terminated?.[1] ?? afterMarker).trim();
-      this.scratch.messageBuf = firstText;
 
-      // If the rest of the chunk contains a terminator, emit the message now.
-      // The status-frame noise will be handled by the other parsers.
-      const consumed = (terminated?.[1] ?? "").length;
-      const remaining = afterMarker.slice(consumed);
-      if (firstText && remaining.length > 0) {
-        // In-chunk termination
-        next.lastMessage = firstText;
-        messages.push({ text: firstText, ts: new Date().toISOString() });
-        events.push({ kind: "message", data: { text: firstText } });
-        this.scratch.capturingMessage = false;
-        this.scratch.messageBuf = "";
+      // Accumulate-longest strategy (4d-polish, 2026-04-19):
+      //
+      // Claude re-emits the ● message block on every status-frame redraw.
+      // The previous strategy (emit on first terminator, replace buffer on
+      // the next `●`) caused two problems: (a) long messages whose full text
+      // only appeared in later redraws got truncated, (b) the same message
+      // got emitted once per redraw — many duplicates in the stream.
+      //
+      // New strategy: if the new ● text and our current buffer share a
+      // common prefix, this is the same message being redrawn — keep the
+      // longer version. Otherwise it's a genuinely new message and we
+      // finalize the previous one first. Dedup against next.lastMessage at
+      // emit time catches the rare same-text re-composition.
+      if (this.scratch.capturingMessage && this.scratch.messageBuf) {
+        const prev = this.scratch.messageBuf;
+        if (firstText.startsWith(prev) || prev.startsWith(firstText)) {
+          this.scratch.messageBuf = firstText.length > prev.length ? firstText : prev;
+        } else {
+          if (prev.trim() && prev.trim() !== next.lastMessage) {
+            const text = prev.trim();
+            next.lastMessage = text;
+            messages.push({ text, ts: new Date().toISOString() });
+            events.push({ kind: "message", data: { text } });
+          }
+          this.scratch.messageBuf = firstText;
+        }
+      } else {
+        this.scratch.messageBuf = firstText;
+        this.scratch.capturingMessage = true;
       }
 
       if (next.blocking) delete next.blocking;
@@ -271,10 +284,14 @@ export class ClaudeParser implements DriverParser {
     }
 
     if (this.scratch.capturingMessage) {
-      // End-of-message triggers: blank line or a new glyph marker
-      if (clean === "" || /^[\u23BF\u2722\u2736\u23F5\u23F8\u25CF]/.test(clean)) {
+      // End-of-message triggers: blank line or a new non-● glyph marker.
+      // (A ● would have hit the branch above.) The mode line (⏵⏵ / ⏸) is
+      // the canonical "composition done" signal.
+      if (clean === "" || /^[\u23BF\u2722\u2736\u23F5\u23F8]/.test(clean)) {
         const text = this.scratch.messageBuf.trim();
-        if (text) {
+        // Dedup against the last-published message — Claude's status redraws
+        // can re-flush the same buffer via this path multiple times.
+        if (text && text !== next.lastMessage) {
           next.lastMessage = text;
           messages.push({ text, ts: new Date().toISOString() });
           events.push({ kind: "message", data: { text } });
@@ -283,6 +300,8 @@ export class ClaudeParser implements DriverParser {
         this.scratch.messageBuf = "";
         return true;
       }
+      // Continuation — append any non-status content so multi-line messages
+      // accumulate across chunks.
       this.scratch.messageBuf += "\n" + clean;
     }
 
