@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.1.2 — pre-release.
+**Status:** v0.1.3 — pre-release.
 
 ## What it is
 
@@ -86,6 +86,21 @@ When a driver's parser drifts against a new CLI release, capture the raw PTY str
 ```
 
 Each line is one event. The `meta` header records the driver id, driver version, CLI version, and the driver's tested range (`supportedVersions`). The file mode is `0600`; the directory self-ignores via `.cordyceps/.gitignore`.
+
+### Fixture replay (parser regression guard)
+
+Captures drop into `test/fixtures/<driver>/<version>/` and feed back through the parser in CI:
+
+```ts
+import { loadCapture, replay } from "../fixtures/replay.js";
+import { ClaudeParser } from "../../src/drivers/claude/parser.js";
+
+const cap = loadCapture("test/fixtures/claude/v2.1.114/basic-hello.jsonl");
+const { finalState, messages } = replay(cap, new ClaudeParser());
+// assert messages + finalState match recorded live values
+```
+
+When a CLI release shifts glyph spacing, mode-line shape, or spinner frames, the fixture breaks on the next `pnpm test` and the fix lives in the driver directory.
 
 ## Architecture
 
