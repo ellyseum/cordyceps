@@ -1,6 +1,6 @@
 {
   "name": "@ellyseum/cordyceps",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Local-first agent harness — spawns and drives PTY-based CLI coding agents via a JSON-RPC 2.0 control plane, with a service bus and plugin architecture.",
   "type": "module",
   "bin": {
