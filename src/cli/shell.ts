@@ -21,6 +21,7 @@ import { runDriversCmd } from "./commands/drivers.js";
 import { runEphemeral } from "./commands/ephemeral.js";
 import { runCapture } from "./commands/capture.js";
 import { runMcpStdio } from "./commands/mcp-stdio.js";
+import { runManager } from "./commands/manager.js";
 
 const HELP = `cordy — local-first agent harness CLI
 
@@ -50,6 +51,10 @@ Diagnostics:
 MCP:
   cordy mcp-stdio                     Expose cordy as an MCP server (stdio) — lets a Claude/Codex
                                       session drive peer agents through your daemon
+
+Manager:
+  cordy manager [--driver X] [--model M] <task...>
+                                      Spawn a cordy-manager agent wired with MCP delegation
 
 Ephemeral:
   cordy --ephemeral <command...>      Spin up a transient daemon for one command
@@ -101,6 +106,8 @@ async function main(): Promise<void> {
       process.exit(await runCapture(rest));
     case "mcp-stdio":
       process.exit(await runMcpStdio(rest));
+    case "manager":
+      process.exit(await runManager(rest));
     default:
       process.stderr.write(`Unknown command: ${cmd}\n\n${HELP}`);
       process.exit(1);

@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.3.1 — pre-release.
+**Status:** v0.3.2 — pre-release.
 
 ## What it is
 
@@ -73,6 +73,15 @@ For convenience, link `bin/cordy` onto your PATH or use `./bin/cordy` directly.
 ./bin/cordy --ephemeral doctor
 ./bin/cordy --ephemeral spawn claude --name once
 ```
+
+### Manager agent — delegate tasks to a fleet
+
+```bash
+cordy manager "summarize the git log since last week"
+cordy manager --driver claude --model haiku-4-5 "write a unit test for src/core/bus.ts"
+```
+
+Spawns a Claude session wired with cordy's MCP control plane and a manager system prompt. The manager is a peer agent — it can spawn other agents (Codex for exec tasks, Ollama for cheap reasoning, Gemini for search-heavy work), coordinate their output, and report back. Press Ctrl+C to interrupt; the spawned agent is killed.
 
 ### MCP bridge — expose cordy to another agent
 

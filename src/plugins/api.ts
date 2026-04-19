@@ -82,6 +82,8 @@ export interface PluginContext {
 export interface RpcContext {
   /** Register a method handler (plugins normally use the `methods` field instead) */
   register(method: string, handler: JsonRpcHandler): void;
+  /** Unregister a method — use in onDestroy if you registered via this context */
+  unregister(method: string): boolean;
   /** Broadcast a notification to all subscribed clients */
   broadcast(method: string, params?: unknown): void;
   /** Direct send to a specific client */
@@ -101,6 +103,7 @@ export interface PluginConfig {
 export function createRpcContext(dispatcher: RpcDispatcher): RpcContext {
   return {
     register: (method, handler) => dispatcher.register(method, handler),
+    unregister: (method) => dispatcher.unregister(method),
     broadcast: (method, params) => dispatcher.broadcast(method, params),
     send: (clientId, method, params) => dispatcher.send(clientId, method, params),
   };

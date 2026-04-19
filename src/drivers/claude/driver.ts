@@ -39,6 +39,8 @@ export interface ClaudeProfile extends DriverProfile {
   effort?: string;
   /** Custom agents JSON (per Claude Code --agents) */
   agents?: unknown;
+  /** Append to Claude's system prompt (per Claude Code --append-system-prompt) */
+  appendSystemPrompt?: string;
 
   // Session handling — precedence: resume > continue > sessionId > fresh
   resume?: string;         // --resume <uuid>
@@ -149,6 +151,7 @@ export class ClaudeDriver implements Driver {
     if (profile.mcpConfig) args.push("--mcp-config", JSON.stringify(profile.mcpConfig));
     if (profile.effort) args.push("--effort", profile.effort);
     if (profile.agents) args.push("--agents", JSON.stringify(profile.agents));
+    if (profile.appendSystemPrompt) args.push("--append-system-prompt", profile.appendSystemPrompt);
     if (profile.extraArgs) args.push(...profile.extraArgs);
 
     const cwd = profile.cwd ?? process.cwd();
