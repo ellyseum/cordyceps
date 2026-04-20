@@ -8,6 +8,7 @@
 import { createServiceBus, type ServiceBus } from "../core/bus.js";
 import { initLogger, logger } from "../core/logger.js";
 import { loadConfig } from "../core/config.js";
+import { loadEnvFile } from "../core/env.js";
 import { createBuiltinDriverRegistry } from "../drivers/index.js";
 import { AgentManager } from "../agents/manager.js";
 import { registerBuiltinRuntimes } from "../agents/runtime.js";
@@ -18,7 +19,7 @@ import { generateToken } from "../transport/auth.js";
 import { writeInstance, removeInstance } from "../daemon/instances.js";
 import { discoverBuiltins, loadAll, destroyPlugin, type LoadedPlugin } from "../plugins/loader.js";
 
-const VERSION = "0.4.7";
+const VERSION = "0.4.8";
 
 export interface EngineOpts {
   port?: number;
@@ -41,6 +42,13 @@ export interface RunningEngine {
 export async function startEngine(opts: EngineOpts = {}): Promise<RunningEngine> {
   initLogger();
   logger.info("engine", `cordyceps ${VERSION} starting (pid=${process.pid})`);
+
+  // Load env file (CORDY_ENV_FILE > <cwd>/.cordyceps/env > ~/.cordyceps/env).
+  // Shell env wins over file values — this fills gaps, doesn't overwrite.
+  // Drivers that need secrets (Gemini's GEMINI_API_KEY, future Aider's
+  // OPENAI_API_KEY) read from process.env at spawn time, so this must run
+  // BEFORE driver registration.
+  loadEnvFile(process.cwd(), logger);
 
   const config = loadConfig(opts.configPath);
   const startedAt = Date.now();

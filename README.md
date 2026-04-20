@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.4.7 — pre-release.
+**Status:** v0.4.8 — pre-release.
 
 ## What it is
 
@@ -214,6 +214,7 @@ When a CLI's output format changes, the fix lives in its driver directory (parse
 ## Persistence + security
 
 - `~/.cordyceps/` (mode `0700`) — daemon state, instance files, audit logs
+- `~/.cordyceps/env` (mode `0600`, auto-created 0600 if found looser) — optional env-file auto-loaded at daemon start. Shell env wins over file values. Useful for driver API keys like `GEMINI_API_KEY`. Can override path via `CORDY_ENV_FILE=…`. Per-repo override: `<repo>/.cordyceps/env`.
 - `~/.cordyceps/instances/{pid}.json` (mode `0600`, atomic writes) — discovery for the `cordy` client
 - `<repo>/.cordyceps/` — per-repo artifacts. Cordyceps creates `.cordyceps/.gitignore` (containing `*`) on first write but never modifies the repo's own `.gitignore`. Use `cordy init --gitignore` to opt into that.
 - Loopback-only transport (`127.0.0.1`)
