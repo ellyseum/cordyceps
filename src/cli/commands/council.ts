@@ -44,10 +44,12 @@ interface Flags {
   positional: string[];
   staged: boolean;
   scope?: string;
+  /** Force inline (paste source) even for tool-capable drivers. Default false — agents Read the file themselves. */
+  inline: boolean;
 }
 
 function parseFlags(args: string[]): Flags {
-  const f: Flags = { asJson: false, noChunk: false, positional: [], staged: false };
+  const f: Flags = { asJson: false, noChunk: false, positional: [], staged: false, inline: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--panel" && args[i + 1]) f.panel = args[++i];
@@ -64,6 +66,7 @@ function parseFlags(args: string[]): Flags {
     else if (a === "--json") f.asJson = true;
     else if (a === "--no-chunk") f.noChunk = true;
     else if (a === "--staged") f.staged = true;
+    else if (a === "--inline") f.inline = true;
     else f.positional.push(a);
   }
   return f;
@@ -109,7 +112,7 @@ async function runFileReview(f: Flags): Promise<number> {
 
     const result = await client.call<CouncilResult>(
       "council.review",
-      { path, panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk },
+      { path, panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk, forceInline: f.inline },
       (f.timeoutMs ?? 180_000) * 4 + 120_000,
     );
     printSummary(result, f.asJson);
@@ -156,7 +159,14 @@ export async function runCouncil(args: string[]): Promise<number> {
   cordy council diff --staged           Review only staged changes
   cordy council diff <base..head>       Review a branch comparison
 
-Shared flags: --panel D1,D2 --chair D --timeout S --no-chunk --scope PATH --json
+Shared flags:
+  --panel D1,D2     Reviewer panel (default: claude,codex,gemini)
+  --chair D         Chair driver (default: codex)
+  --timeout S       Per-reviewer timeout in seconds (default: 180)
+  --inline          Force inline source stuffing even for tool-capable drivers
+  --no-chunk        Disable chunking (fails hard if file exceeds single-chunk limit)
+  --scope PATH      git diff path filter (diff mode only)
+  --json            Emit full result as JSON
 `);
     return 1;
   }

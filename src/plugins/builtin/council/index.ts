@@ -50,6 +50,12 @@ interface CouncilParams {
   timeoutMs?: number;
   /** Disable chunking (fails hard if file exceeds MAX_CHUNK_BYTES). Default false. */
   noChunk?: boolean;
+  /**
+   * Force inline-stuff mode (paste source into prompt) for ALL reviewers,
+   * even those that have tool access. Default false — tool-capable drivers
+   * use a path-only prompt and read the file themselves.
+   */
+  forceInline?: boolean;
 }
 
 interface DiffParams {
@@ -102,6 +108,42 @@ const DEFAULT_PANEL: ReviewerSpec[] = [
 // synthesis outputs. Override with --chair claude when you want Claude's
 // judgment over the chair's output format.
 const DEFAULT_CHAIR: ReviewerSpec = { driver: "codex" };
+
+/**
+ * Which driver/mode combos can read files via their own tools during a review.
+ * Tool-capable drivers get a path-only prompt (agent reads what it wants, can
+ * check imports/tests/related files). Non-tool-capable drivers fall back to
+ * the inline-stuff-the-source prompt with chunking for big files.
+ */
+function driverSupportsTools(driverId: string, mode: string): boolean {
+  if (mode === "pty" && (driverId === "claude-code" || driverId === "claude")) return true;
+  if (mode === "exec" && (driverId === "codex" || driverId === "gemini")) return true;
+  return false;
+}
+
+/**
+ * The default mode each builtin driver will run in when no profile.mode
+ * override is provided. Used by council to route the review prompt before
+ * actually spawning (probe-free heuristic — the real mode is picked by
+ * AgentManager at spawn time based on registered runtimes ∩ probe).
+ */
+function defaultModeFor(driverId: string): string {
+  switch (driverId) {
+    case "claude":
+    case "claude-code":
+      return "pty";
+    case "codex":
+    case "cx":
+    case "gemini":
+    case "gm":
+      return "exec";
+    case "ollama":
+    case "ol":
+      return "server-http";
+    default:
+      return "exec"; // conservative default for unknown drivers
+  }
+}
 
 /**
  * Line-based chunker. Prefers to split on blank lines (likely a block boundary)
@@ -169,7 +211,42 @@ function chunkByLines(source: string, maxBytes: number): Chunk[] {
   return chunks.map((c, i) => ({ ...c, index: i, total: chunks.length }));
 }
 
-function reviewerPrompt(targetPath: string, chunk: Chunk): string {
+/**
+ * Tool-driven prompt — the agent reads the file itself via its own tools.
+ * Works for drivers with file-access tools (Claude PTY, Codex exec, Gemini exec).
+ * No source inlined → no chunk budget to worry about → reviewer can also check
+ * imports, tests, and related files for richer cross-file context.
+ */
+function toolDrivenReviewerPrompt(targetPath: string): string {
+  return `You are a code reviewer on a blind council. You do NOT see other reviewers' output. Review the file below and flag real issues.
+
+## Target
+${targetPath}
+
+## How to review
+You have Read, Grep, and Bash tools. Read the target file directly. Feel free to check related files — imports, the tests, similar modules — if they clarify whether something is a bug. Don't go off on tangents; keep the review focused on the target.
+
+## Focus areas (priority order)
+  1. Correctness bugs (logic errors, race conditions, unhandled cases)
+  2. Security issues (injection, auth bypass, secret leakage, unsafe defaults)
+  3. Performance issues (O(n²) where O(n) works, allocation in hot paths, leaks)
+  4. Readability / maintainability (only if meaningful — don't nitpick style)
+
+## Rules
+  - Skip findings you're <70% confident about
+  - Don't invent issues to seem thorough — empty review is fine
+  - Each finding is ONE bullet point of real substance
+
+## Output format
+Output a JSON array on the LAST line of your response, with NO prose after it.
+Each finding: {"severity": "critical|high|medium|low|info", "category": "correctness|security|performance|style", "title": "short title", "detail": "2-3 sentences explaining the issue and its impact", "line": <number or null>, "suggested_fix": "concrete fix or null"}
+
+If you find nothing: output []
+
+Output your JSON findings array now:`;
+}
+
+function inlineReviewerPrompt(targetPath: string, chunk: Chunk): string {
   // Guard against source-level prompt injection. Everything between the
   // <source> tags is UNTRUSTED DATA, not additional instructions. This also
   // uses a delimiter Claude and Codex are well-trained to treat as data.
@@ -212,20 +289,28 @@ Output your JSON findings array now:`;
 
 function chairPrompt(targetPath: string, reviewers: ReviewerResult[], totalChunks: number): string {
   const sections = reviewers.map((r) => {
-    const chunkTag = r.chunkIndex !== undefined
+    const scopeTag = r.chunkIndex !== undefined
       ? ` [chunk ${r.chunkIndex + 1}/${totalChunks}, lines ${r.chunkStartLine}–${r.chunkEndLine}]`
-      : "";
-    if (r.error) return `## Reviewer: ${r.name} (driver=${r.driver})${chunkTag}\n  ERROR: ${r.error}\n`;
+      : ` [whole-file, tool-driven]`;
+    if (r.error) return `## Reviewer: ${r.name} (driver=${r.driver})${scopeTag}\n  ERROR: ${r.error}\n`;
     const findings = JSON.stringify(r.findings ?? [], null, 2);
-    return `## Reviewer: ${r.name} (driver=${r.driver})${chunkTag}\n\`\`\`json\n${findings}\n\`\`\`\n`;
+    return `## Reviewer: ${r.name} (driver=${r.driver})${scopeTag}\n\`\`\`json\n${findings}\n\`\`\`\n`;
   }).join("\n");
 
   const validReviewers = reviewers.filter((r) => !r.error);
-  const chunkNote = totalChunks > 1
-    ? `The file was split into ${totalChunks} chunks for review. Each reviewer saw one chunk. When deduplicating, findings from different chunks are almost never duplicates of each other — but watch for systemic patterns that appear across multiple chunks (same kind of bug in multiple places = higher priority).`
-    : "They worked independently — none saw another's findings.";
+  const anyInlineChunks = reviewers.some((r) => r.chunkIndex !== undefined);
+  const anyToolDriven = reviewers.some((r) => r.chunkIndex === undefined);
 
-  return `You are the chair of a code review council. ${validReviewers.length} of ${reviewers.length} reviewer passes completed their reviews. ${chunkNote}
+  let scopeNote = "They worked independently — none saw another's findings.";
+  if (anyInlineChunks && anyToolDriven) {
+    scopeNote = `Reviewers worked in two modes: some saw the WHOLE file via their own tools (tagged [whole-file, tool-driven]), others saw individual CHUNKS of the file inlined in their prompt (tagged [chunk N/M, lines X-Y]). Tool-driven reviewers may surface cross-file context; inline reviewers see less but are more systematic per chunk. Dedupe across both; treat whole-file findings that a chunked reviewer also flagged as extra-strong agreement.`;
+  } else if (totalChunks > 1) {
+    scopeNote = `The file was split into ${totalChunks} chunks for review. Each reviewer saw one chunk. When deduplicating, findings from different chunks are almost never duplicates of each other — but watch for systemic patterns that appear across multiple chunks (same kind of bug in multiple places = higher priority).`;
+  } else if (anyToolDriven) {
+    scopeNote = `Reviewers saw the whole file via their own tools. Each worked independently.`;
+  }
+
+  return `You are the chair of a code review council. ${validReviewers.length} of ${reviewers.length} reviewer passes completed their reviews. ${scopeNote}
 
 Your job:
   1. Deduplicate — findings that describe the same issue should be collapsed
@@ -295,16 +380,21 @@ async function runOneReviewer(
   ctx: PluginContext,
   spec: ReviewerSpec,
   reviewId: string,
-  chunkIndex: number,
   reviewerIndex: number,
   prompt: string,
-  chunk: Chunk,
-  timeoutMs: number,
+  opts: {
+    /** Present only for inline/chunked reviews; absent for tool-driven whole-file reviews */
+    chunk?: Chunk;
+    timeoutMs: number;
+  },
 ): Promise<ReviewerResult> {
+  const chunk = opts.chunk;
+  const timeoutMs = opts.timeoutMs;
+
   // Per-review random suffix so concurrent council.review calls don't collide.
-  // Chunk index keeps multi-chunk reviewers unique across the review.
-  const name = chunk.total > 1
-    ? `council-${reviewId}-c${chunkIndex}-reviewer-${reviewerIndex}-${spec.driver}`
+  // Chunk index keeps multi-chunk inline reviewers unique across the review.
+  const name = chunk && chunk.total > 1
+    ? `council-${reviewId}-c${chunk.index}-reviewer-${reviewerIndex}-${spec.driver}`
     : `council-${reviewId}-reviewer-${reviewerIndex}-${spec.driver}`;
   let agent: AgentRuntime | undefined;
   let actualId: string | undefined;
@@ -325,6 +415,16 @@ async function runOneReviewer(
     const result = await agent.submit(prompt, { timeoutMs });
     const rawText = result.message?.text ?? "";
     const findings = extractFindings(rawText);
+    // Chunk metadata is only meaningful for multi-chunk inline reviews.
+    // Tool-driven reviewers see the whole file via their own tools, so chunk
+    // fields stay undefined.
+    const chunkMeta = chunk && chunk.total > 1
+      ? {
+          chunkIndex: chunk.index,
+          chunkStartLine: chunk.startLine,
+          chunkEndLine: chunk.endLine,
+        }
+      : {};
     if (findings === null) {
       // Parse failure is a REVIEW FAILURE, not a clean review. Otherwise the
       // chair sees the same [] as "reviewer approved" and we silently drop
@@ -332,9 +432,7 @@ async function runOneReviewer(
       return {
         name,
         driver: spec.driver,
-        chunkIndex: chunk.total > 1 ? chunk.index : undefined,
-        chunkStartLine: chunk.total > 1 ? chunk.startLine : undefined,
-        chunkEndLine: chunk.total > 1 ? chunk.endLine : undefined,
+        ...chunkMeta,
         error: "reviewer output did not contain a parseable JSON findings array",
         rawText,
       };
@@ -342,17 +440,16 @@ async function runOneReviewer(
     return {
       name,
       driver: spec.driver,
-      chunkIndex: chunk.total > 1 ? chunk.index : undefined,
-      chunkStartLine: chunk.total > 1 ? chunk.startLine : undefined,
-      chunkEndLine: chunk.total > 1 ? chunk.endLine : undefined,
+      ...chunkMeta,
       findings,
       rawText,
     };
   } catch (err) {
+    const chunkMeta = chunk && chunk.total > 1 ? { chunkIndex: chunk.index } : {};
     return {
       name,
       driver: spec.driver,
-      chunkIndex: chunk.total > 1 ? chunk.index : undefined,
+      ...chunkMeta,
       error: (err as Error).message,
     };
   } finally {
@@ -584,26 +681,69 @@ const plugin: CordycepsPlugin = {
       const reviewId = randomBytes(4).toString("hex");
       const startedAt = Date.now();
 
-      // Chunk if source exceeds single-chunk limit. Each chunk gets reviewed
-      // by the full panel; chair synthesizes across all (chunk × reviewer) pairs.
-      const chunks = chunkByLines(source, MAX_CHUNK_BYTES);
+      // Split the panel into two buckets based on driver capability:
+      //   - tool-capable: path-only prompt, one agent per reviewer, no chunking
+      //   - inline: source stuffed in prompt, chunk if large, N chunks × M reviewers
+      // Diff mode is always inline (the diff is a synthesized artifact, not
+      // a file on disk the agent can Read). forceInline also forces inline.
+      const forceInline = p.forceInline === true || mode === "diff";
+      const toolCapable: Array<{ spec: ReviewerSpec; index: number }> = [];
+      const inlineReviewers: Array<{ spec: ReviewerSpec; index: number }> = [];
+
+      for (let i = 0; i < panel.length; i++) {
+        const spec = panel[i];
+        // Heuristic: resolve to the driver/mode the manager will pick. We don't
+        // call drivers.probe here (too expensive) — just match on declared
+        // driver id/alias and assume the runtime will pick its preferred mode.
+        //   - claude/claude-code → pty
+        //   - codex → exec
+        //   - gemini → exec
+        //   - ollama → server-http (no tools)
+        // Profile.mode override is respected.
+        const requestedMode = (spec.profile?.mode as string | undefined) ?? defaultModeFor(spec.driver);
+        if (!forceInline && driverSupportsTools(spec.driver, requestedMode)) {
+          toolCapable.push({ spec, index: i });
+        } else {
+          inlineReviewers.push({ spec, index: i });
+        }
+      }
+
+      // Chunking only happens for inline reviewers.
+      const chunks = inlineReviewers.length > 0
+        ? chunkByLines(source, MAX_CHUNK_BYTES)
+        : [{ text: source, startLine: 1, endLine: source.split("\n").length, index: 0, total: 1 } as Chunk];
+
       ctx.logger.info(
         "council",
-        `review ${reviewId} start (${mode}): ${targetLabel} (${chunks.length} chunk${chunks.length > 1 ? "s" : ""}, ${panel.length} reviewers, chair=${chair.driver})`,
+        `review ${reviewId} start (${mode}): ${targetLabel} ` +
+        `(tool-driven=${toolCapable.length}, inline=${inlineReviewers.length}×${chunks.length}chunks, ` +
+        `chair=${chair.driver})`,
       );
-      ctx.notify("council.start", { reviewId, target: targetLabel, mode, panel, chair, chunks: chunks.length });
+      ctx.notify("council.start", {
+        reviewId, target: targetLabel, mode, panel, chair,
+        toolDriven: toolCapable.length,
+        inlineReviewers: inlineReviewers.length,
+        chunks: chunks.length,
+      });
 
-      // Run panel × chunks in parallel. For a 3-reviewer × 5-chunk file that's
-      // 15 agents concurrently — fine for our driver families on this host.
       const reviewTasks: Promise<ReviewerResult>[] = [];
+
+      // Tool-driven: one spawn per reviewer, path-only prompt.
+      for (const { spec, index } of toolCapable) {
+        const prompt = toolDrivenReviewerPrompt(targetLabel);
+        reviewTasks.push(runOneReviewer(ctx, spec, reviewId, index, prompt, { timeoutMs }));
+      }
+
+      // Inline: N chunks × M inline reviewers.
       for (const chunk of chunks) {
         const prompt = mode === "diff"
           ? diffReviewerPrompt(targetLabel, chunk)
-          : reviewerPrompt(targetLabel, chunk);
-        for (let i = 0; i < panel.length; i++) {
-          reviewTasks.push(runOneReviewer(ctx, panel[i], reviewId, chunk.index, i, prompt, chunk, timeoutMs));
+          : inlineReviewerPrompt(targetLabel, chunk);
+        for (const { spec, index } of inlineReviewers) {
+          reviewTasks.push(runOneReviewer(ctx, spec, reviewId, index, prompt, { chunk, timeoutMs }));
         }
       }
+
       const reviews = await Promise.all(reviewTasks);
 
       const succeeded = reviews.filter((r) => !r.error);
@@ -661,6 +801,6 @@ const plugin: CordycepsPlugin = {
 export { parsePanelArg, parseReviewerSpec };
 
 /** Test-only exports. Not part of the public plugin surface. */
-export const __testables__ = { chunkByLines, extractFindings };
+export const __testables__ = { chunkByLines, extractFindings, driverSupportsTools, defaultModeFor };
 
 export default plugin;

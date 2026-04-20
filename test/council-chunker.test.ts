@@ -11,7 +11,7 @@ import { describe, it, expect } from "vitest";
 // We add a named export of `chunkByLines` just for testability.
 import { __testables__ } from "../src/plugins/builtin/council/index.js";
 
-const { chunkByLines } = __testables__;
+const { chunkByLines, driverSupportsTools, defaultModeFor } = __testables__;
 
 describe("council chunker", () => {
   it("returns a single chunk for small files", () => {
@@ -64,5 +64,40 @@ describe("council chunker", () => {
       expect(chunks[i].index).toBe(i);
       expect(chunks[i].total).toBe(chunks.length);
     }
+  });
+});
+
+describe("council driver capability routing", () => {
+  it("Claude PTY has tools", () => {
+    expect(driverSupportsTools("claude-code", "pty")).toBe(true);
+    expect(driverSupportsTools("claude", "pty")).toBe(true);
+  });
+
+  it("Codex + Gemini exec have tools", () => {
+    expect(driverSupportsTools("codex", "exec")).toBe(true);
+    expect(driverSupportsTools("gemini", "exec")).toBe(true);
+  });
+
+  it("Ollama server-http does NOT have tools", () => {
+    expect(driverSupportsTools("ollama", "server-http")).toBe(false);
+  });
+
+  it("Claude in exec mode (hypothetical) does NOT have tools", () => {
+    // Defensive: if someone writes a buildExec for Claude later, don't assume
+    // the exec invocation gives tool access by default.
+    expect(driverSupportsTools("claude-code", "exec")).toBe(false);
+  });
+
+  it("unknown driver does NOT have tools (fail-safe)", () => {
+    expect(driverSupportsTools("unknown-driver", "exec")).toBe(false);
+  });
+
+  it("defaultModeFor picks the builtin default for each driver", () => {
+    expect(defaultModeFor("claude")).toBe("pty");
+    expect(defaultModeFor("claude-code")).toBe("pty");
+    expect(defaultModeFor("codex")).toBe("exec");
+    expect(defaultModeFor("gemini")).toBe("exec");
+    expect(defaultModeFor("ollama")).toBe("server-http");
+    expect(defaultModeFor("unknown-driver")).toBe("exec"); // conservative default
   });
 });

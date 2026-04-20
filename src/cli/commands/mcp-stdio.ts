@@ -19,7 +19,7 @@ import { createInterface } from "node:readline";
 import { connect, type RpcClient } from "../client.js";
 
 const MCP_PROTOCOL_VERSION = "2024-11-05";
-const SERVER_VERSION = "0.4.6";
+const SERVER_VERSION = "0.4.7";
 
 interface McpRequest {
   jsonrpc: "2.0";

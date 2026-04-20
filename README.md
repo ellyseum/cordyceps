@@ -2,7 +2,7 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.4.6 — pre-release.
+**Status:** v0.4.7 — pre-release.
 
 ## What it is
 
@@ -86,7 +86,9 @@ cordy council diff main..feature --scope src/   # branch comparison, scoped
 
 Spawns N reviewers from different driver families in parallel, each reviews in a silo (no reviewer sees another's output), then a chair agent synthesizes the findings into a prioritized markdown verdict. Default panel is `[claude, codex, gemini]`, default chair is `codex` (exec-mode output is cleaner than PTY synthesis tails).
 
-`review` operates on a whole file; `diff` reviews the changes shown by `git diff` (with `--no-ext-diff --no-textconv` for hostile-repo safety). Files/diffs larger than ~30KB are auto-chunked by line boundary and every (chunk × reviewer) pair is run in parallel; the chair dedupes across chunks.
+`review` operates on a whole file; `diff` reviews the changes shown by `git diff` (with `--no-ext-diff --no-textconv` for hostile-repo safety).
+
+**Tool-driven vs inline reviewers:** when a reviewer driver has file-access tools (Claude PTY, Codex exec, Gemini exec), the council sends it a **path-only prompt** and the agent Reads the file itself — including related imports/tests if useful. Drivers without tool access (Ollama server-http) fall back to **inline** mode where the source is stuffed into the prompt, auto-chunked at ~30KB boundaries. `--inline` forces inline for all reviewers. Diff mode is always inline (a diff is a synthesized artifact, not a file on disk).
 
 The whole point is heterogeneous training lineages — intra-family ensembles correlate their blind spots; inter-family councils don't.
 
