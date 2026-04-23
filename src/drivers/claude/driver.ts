@@ -1,11 +1,28 @@
 /**
  * ClaudeDriver — the v1 flagship driver.
  *
- * Modes: ["pty", "exec"]. PTY drives the full TUI (interactive sessions,
- * tool use, streamed output via terminal escape codes). Exec uses
- * `claude -p` (--print) for one-shot non-interactive answers — clean
- * stdout, much smaller TUI-parsing surface, ideal for headless council
- * reviews / automated prompts.
+ * Modes: ["pty", "exec"]
+ *
+ *   pty  (EXPERIMENTAL):  drives the full Claude Code TUI — interactive
+ *                         sessions, tool use, streamed output via terminal
+ *                         escape codes. Powerful but the parser must walk
+ *                         escape sequences (spinners, "Herding…" status
+ *                         redraws, animated thinking glyphs) and under load
+ *                         it loses sync — captured transcripts come back as
+ *                         fragmented character soup (`r ✻`, `H d`, etc.).
+ *                         Reliability improves over time but treat as
+ *                         experimental for headless / scripted use until
+ *                         the parser gets a hardening pass. For council /
+ *                         automated review use, prefer exec mode.
+ *
+ *   exec (RECOMMENDED for one-shot):  uses `claude --print <prompt>` for
+ *                         non-interactive answers. Stdout is plain text,
+ *                         no TUI animation, no escape codes to walk —
+ *                         ExecAgentController emits stdout verbatim as a
+ *                         single AssistantMessage. Far more reliable than
+ *                         PTY for headless prompts. Pass --mode=exec on
+ *                         spawn (with equals — space-separated may
+ *                         mis-parse).
  *
  * Aliases: ["claude"] so `cordy spawn claude` works.
  *
@@ -129,6 +146,20 @@ export class ClaudeDriver implements Driver {
     };
   }
 
+  /**
+   * PTY mode (EXPERIMENTAL).
+   *
+   * Drives the live Claude Code TUI by writing prompts to a pseudo-terminal
+   * and capturing the rendered output. Required for interactive sessions or
+   * any case that needs Claude's tool use (Read/Grep/Bash) inside the agent.
+   *
+   * Caveat: ClaudeParser walks TUI escape sequences (animated spinners,
+   * "Herding…" status redraws, thinking-glyph rotations). Under load, the
+   * stream can fragment and the captured transcript comes back as character
+   * soup — symptoms include partial words, repeated chunks, missing
+   * sections, and apparent hangs where the agent is actually idle. Don't
+   * rely on PTY for headless / scripted council prompts; use exec mode.
+   */
   buildPtySpawn(profile: ClaudeProfile): SpawnSpec {
     const args: string[] = [];
 
