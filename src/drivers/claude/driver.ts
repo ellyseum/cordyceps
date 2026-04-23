@@ -1,8 +1,11 @@
 /**
  * ClaudeDriver — the v1 flagship driver.
  *
- * Modes: ["pty"]. Exec + server-ws will be added when the runtime plugins
- * for those modes land in phase 2+.
+ * Modes: ["pty", "exec"]. PTY drives the full TUI (interactive sessions,
+ * tool use, streamed output via terminal escape codes). Exec uses
+ * `claude -p` (--print) for one-shot non-interactive answers — clean
+ * stdout, much smaller TUI-parsing surface, ideal for headless council
+ * reviews / automated prompts.
  *
  * Aliases: ["claude"] so `cordy spawn claude` works.
  *
@@ -17,7 +20,7 @@ import { freshSessionId, isolateClaudeConfig } from "./session.js";
 import { ClaudeParser } from "./parser.js";
 import { ClaudeControl } from "./control.js";
 import { gradeCompat } from "../../core/semver.js";
-import type { Driver, DriverMode, DriverProbe, DriverProfile, SpawnSpec } from "../api.js";
+import type { Driver, DriverMode, DriverProbe, DriverProfile, ExecSpec, ExecTask, SpawnSpec } from "../api.js";
 
 export interface ClaudeProfile extends DriverProfile {
   /** Skip hooks/LSP/plugin sync/auto-memory/CLAUDE.md/keychain. Requires API-key auth. */
@@ -58,9 +61,9 @@ export interface ClaudeProfile extends DriverProfile {
 export class ClaudeDriver implements Driver {
   id = "claude-code";
   label = "Claude Code";
-  version = "0.1.0";
+  version = "0.2.0";  // bumped on adding exec mode (was 0.1.0 / pty-only)
   aliases = ["claude"];
-  modes: DriverMode[] = ["pty"];
+  modes: DriverMode[] = ["pty", "exec"];
   /** CLI versions we've tested against + keep fixtures for. */
   supportedVersions = ">=2.1.100 <2.2.0";
 
@@ -96,6 +99,7 @@ export class ClaudeDriver implements Driver {
       capabilities.agentsFlag = /--agents/.test(help);
       capabilities.effort = /--effort/.test(help);
       capabilities.permissionMode = /--permission-mode/.test(help);
+      capabilities.printMode = /--print|^\s*-p,/m.test(help);
     } catch {
       warnings.push("could not parse `claude --help` for capability detection");
     }
@@ -108,13 +112,19 @@ export class ClaudeDriver implements Driver {
       );
     }
 
+    // Modes available on this machine: PTY always (if binary present); exec
+    // requires --print support which probably exists in any modern claude
+    // (>=1.0.x), but we gate on the help-text probe to be defensive.
+    const supportedModes: DriverMode[] = ["pty"];
+    if (capabilities.printMode !== false) supportedModes.push("exec");
+
     return {
       available: true,
       version,
       path,
       capabilities,
       warnings,
-      supportedModes: ["pty"],
+      supportedModes,
       compat,
     };
   }
@@ -171,6 +181,53 @@ export class ClaudeDriver implements Driver {
       args,
       cwd,
       env,
+    };
+  }
+
+  /**
+   * Exec mode — `claude -p <prompt>` for one-shot non-interactive answers.
+   * Stdout is plain text (the assistant's response), no TUI animation, no
+   * spinner redraws, no escape-code parsing. Vastly more reliable than PTY
+   * for council-style use where we just want a single response.
+   *
+   * Most PTY profile fields carry over: --model, --effort, --bare,
+   * --permission-mode, --allowedTools, --disallowedTools, --mcp-config,
+   * --add-dir, --append-system-prompt, --agents. Session flags (--resume,
+   * --continue, --session-id) are intentionally omitted because exec is
+   * one-shot and shouldn't accidentally mutate user history.
+   */
+  buildExec(profile: ClaudeProfile, task: ExecTask): ExecSpec {
+    const args: string[] = ["--print", task.prompt];
+
+    if (profile.bare) args.push("--bare");
+    if (profile.model) args.push("--model", profile.model);
+    if (profile.permissionMode) args.push("--permission-mode", profile.permissionMode);
+    if (profile.allowedTools && profile.allowedTools.length) {
+      args.push("--allowedTools", profile.allowedTools.join(","));
+    }
+    if (profile.disallowedTools && profile.disallowedTools.length) {
+      args.push("--disallowedTools", profile.disallowedTools.join(","));
+    }
+    if (profile.addDirs) profile.addDirs.forEach((d) => args.push("--add-dir", d));
+    if (profile.mcpConfig) args.push("--mcp-config", JSON.stringify(profile.mcpConfig));
+    if (profile.effort) args.push("--effort", profile.effort);
+    if (profile.agents) args.push("--agents", JSON.stringify(profile.agents));
+    if (profile.appendSystemPrompt) args.push("--append-system-prompt", profile.appendSystemPrompt);
+    if (profile.extraArgs) args.push(...profile.extraArgs);
+
+    const cwd = profile.cwd ?? process.cwd();
+    const env: Record<string, string> = {};
+    for (const [k, v] of Object.entries(process.env)) {
+      if (typeof v === "string") env[k] = v;
+    }
+    if (profile.env) Object.assign(env, profile.env);
+
+    return {
+      command: "claude",
+      args,
+      cwd,
+      env,
+      parseOutput: "text",
     };
   }
 }
