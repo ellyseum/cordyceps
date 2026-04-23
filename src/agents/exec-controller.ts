@@ -275,17 +275,32 @@ export class ExecAgentController extends EventEmitter implements AgentRuntime {
         this.activeChild = undefined;
         flushStderr();
 
-        // Flush any residual stdout
-        if (stdoutBuf) {
-          if (spec.parseOutput === "jsonl") {
-            this.feedChunk(stdoutBuf);
-          } else {
-            this.feedChunk(stdoutBuf);
-          }
+        if (spec.parseOutput === "text") {
+          // Plain-text mode: stdout IS the assistant message. Bypass the
+          // driver parser entirely (TUI parsers can't make sense of headless
+          // text output — e.g. ClaudeParser is glyph-based and would emit
+          // nothing here). Emit the accumulated stdout as a single message.
+          const text = stdoutBuf.replace(/\s+$/, "");
           stdoutBuf = "";
+          if (text) {
+            const msg: AssistantMessage = {
+              text,
+              ts: new Date().toISOString(),
+            };
+            this._transcript.push(msg);
+            this.emit("message", msg);
+            this.bus.emit(`agent.${this.id}.message`, msg);
+            this.bus.set(`agent.${this.id}.transcript`, this._transcript);
+          }
+        } else {
+          // jsonl / json: feed accumulated stdout to the driver parser.
+          if (stdoutBuf) {
+            this.feedChunk(stdoutBuf);
+            stdoutBuf = "";
+          }
+          // Final empty-feed to let the parser flush pending messages
+          this.feedChunk("");
         }
-        // Final empty-feed to let the parser flush pending messages
-        this.feedChunk("");
 
         if (code === 0 || signal === "SIGTERM") {
           resolve();
