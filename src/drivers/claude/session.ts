@@ -22,6 +22,21 @@ export function freshSessionId(): string {
   return randomUUID();
 }
 
+/**
+ * Sanity-check session IDs that flow into a filesystem path. Authenticated
+ * callers can already arrange shell-equivalent execution via spawn args, but
+ * we still want a clean public API shape — `../../etc` should never reach
+ * `path.join` for the agent sandbox.
+ */
+const VALID_SESSION_ID = /^[A-Za-z0-9_-]{1,128}$/;
+function assertValidSessionId(id: string): void {
+  if (!VALID_SESSION_ID.test(id)) {
+    throw new Error(
+      `Invalid sessionId: must match ${VALID_SESSION_ID.source}`,
+    );
+  }
+}
+
 export interface IsolatedConfigResult {
   /** Directory to pass via CLAUDE_CONFIG_DIR */
   configDir: string;
@@ -45,6 +60,7 @@ export function isolateClaudeConfig(
   cwd: string,
   opts: { isolateAuth?: boolean } = {},
 ): IsolatedConfigResult {
+  assertValidSessionId(sessionId);
   const claudeDir = join(homedir(), ".claude");
   const sandboxDir = join(homedir(), ".cordyceps", "agents", sessionId);
   const created = !existsSync(sandboxDir);

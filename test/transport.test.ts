@@ -124,6 +124,31 @@ describe("Transport (JSON-RPC over WebSocket)", () => {
       expect(c.ws.readyState).toBe(WebSocket.OPEN);
       c.close();
     });
+
+    it("accepts WS upgrade with token in Authorization header", async () => {
+      const ws = new WebSocket(s.url, {
+        headers: { Authorization: `Bearer ${s.token}` },
+      });
+      const opened = await new Promise<boolean>((resolve) => {
+        ws.on("open", () => resolve(true));
+        ws.on("error", () => resolve(false));
+        ws.on("close", () => resolve(false));
+      });
+      expect(opened).toBe(true);
+      ws.close();
+    });
+
+    it("rejects WS upgrade with non-loopback Host header", async () => {
+      const ws = new WebSocket(s.url, {
+        headers: { Authorization: `Bearer ${s.token}`, Host: "evil.example.com" },
+      });
+      const result = await new Promise<string>((resolve) => {
+        ws.on("error", (err) => resolve("error:" + err.message));
+        ws.on("close", (code) => resolve("close:" + code));
+        ws.on("open", () => resolve("open"));
+      });
+      expect(result).not.toBe("open");
+    });
   });
 
   describe("/health (HTTP)", () => {

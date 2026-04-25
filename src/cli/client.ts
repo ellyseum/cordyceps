@@ -54,8 +54,12 @@ export async function connect(opts: ConnectOpts = {}): Promise<RpcClient> {
 }
 
 export async function openClient(url: string, token: string): Promise<RpcClient> {
-  const wsUrl = `${url}?token=${encodeURIComponent(token)}`;
-  const ws = new WebSocket(wsUrl);
+  // Send the bearer token in the Authorization header on the upgrade request
+  // so it never appears in a URL — keeps it out of HTTP access logs and any
+  // proxy that might log query strings.
+  const ws = new WebSocket(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
   await new Promise<void>((resolve, reject) => {
     const onError = (err: Error) => {

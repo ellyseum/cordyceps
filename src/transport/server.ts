@@ -14,7 +14,7 @@ import type { Logger } from "../core/logger.js";
 import type { ServiceBus, Unsubscribe } from "../core/bus.js";
 import { ClientSession } from "./client-session.js";
 import { RpcDispatcher } from "./rpc.js";
-import { verifyUpgradeToken } from "./auth.js";
+import { verifyUpgradeToken, isLoopbackUpgrade } from "./auth.js";
 
 export interface TransportServerOpts {
   bus: ServiceBus;
@@ -50,8 +50,18 @@ export async function startTransport(opts: TransportServerOpts): Promise<Transpo
       socket.destroy();
       return;
     }
+    if (!isLoopbackUpgrade(req)) {
+      // Defense in depth alongside the loopback bind. Any non-loopback Host
+      // or Origin gets rejected before we even look at the token.
+      socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+      socket.destroy();
+      logger.warn(
+        "transport",
+        `WS upgrade rejected: non-loopback Host/Origin (host=${req.headers.host ?? "?"} origin=${req.headers.origin ?? "?"})`,
+      );
+      return;
+    }
     if (!verifyUpgradeToken(req, token)) {
-      // Auth failure → reject upgrade with 401, then close 1008 if upgrade was already done
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
       logger.warn("transport", `WS upgrade rejected from ${req.socket.remoteAddress}: bad/missing token`);
@@ -82,8 +92,11 @@ export async function startTransport(opts: TransportServerOpts): Promise<Transpo
     cleanups.push(bus.on(`agent.${agentId}.output`, (d) => dispatcher.broadcast("agent.output", { agentId, data: d })));
   }));
 
+  // Expose URL + port on the bus for plugins that want to log them. The
+  // bearer token deliberately stays out of the bus — anything in-process can
+  // read it, and the instance file (mode 0600) is the canonical discovery
+  // surface for clients that need it.
   bus.set("transport.url", url);
-  bus.set("transport.token", token);
   bus.set("transport.port", port);
 
   logger.info("transport", `listening on ${url}`);
