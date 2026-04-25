@@ -2,8 +2,6 @@
 
 **Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
 
-**Status:** v0.4.8 — pre-release.
-
 ## What it is
 
 - **Daemon:** owns N live PTY agent sessions, exposes control over WebSocket JSON-RPC
@@ -193,11 +191,11 @@ Default subscriptions on connect: `agent.created`, `agent.state`, `agent.message
 
 Drivers declare modes (`pty`, `exec`, `server-ws`, `server-http`). The `AgentManager` has a runtime factory registry — runtimes for each mode are added by plugins via `manager.registerRuntime(mode, factory)` without touching core. Adding a new CLI family is a driver plus (if needed) a runtime plugin; nothing in the bus, plugin API, transport, or existing drivers has to change.
 
-Drivers shipped in v0.3.0:
+Built-in drivers:
 
 | Driver | Modes | Notes |
 |--------|-------|-------|
-| `claude-code` | `pty` | Interactive Claude Code TUI, full control (approve/reject/mode-switch) |
+| `claude-code` | `pty`, `exec` | Interactive TUI (`pty`) or one-shot via `claude --print` (`exec`). PTY supports approve/reject/mode-switch; exec is faster and cleaner for one-shot prompts. |
 | `codex` | `exec` | `codex exec --json --skip-git-repo-check` |
 | `gemini` | `exec` | `gemini -p … --output-format stream-json`; needs `GEMINI_API_KEY` in daemon env |
 | `ollama` | `server-http` | Streams NDJSON from `/api/generate`; needs local daemon (`ollama serve`) |
@@ -216,7 +214,7 @@ When a CLI's output format changes, the fix lives in its driver directory (parse
 - `~/.cordyceps/` (mode `0700`) — daemon state, instance files, audit logs
 - `~/.cordyceps/env` (mode `0600`, auto-created 0600 if found looser) — optional env-file auto-loaded at daemon start. Shell env wins over file values. Useful for driver API keys like `GEMINI_API_KEY`. Can override path via `CORDY_ENV_FILE=…`. Per-repo override: `<repo>/.cordyceps/env`.
 - `~/.cordyceps/instances/{pid}.json` (mode `0600`, atomic writes) — discovery for the `cordy` client
-- `<repo>/.cordyceps/` — per-repo artifacts. Cordyceps creates `.cordyceps/.gitignore` (containing `*`) on first write but never modifies the repo's own `.gitignore`. Use `cordy init --gitignore` to opt into that.
+- `<repo>/.cordyceps/` — per-repo artifacts. Cordyceps creates `.cordyceps/.gitignore` (containing `*`) on first write but never modifies the repo's own `.gitignore`.
 - Loopback-only transport (`127.0.0.1`)
 - 192-bit bearer token, regenerated per daemon start
 - WS auth failure → close code 1008 (no JSON-RPC session ever begins)
@@ -224,6 +222,6 @@ When a CLI's output format changes, the fix lives in its driver directory (parse
 ## Tests
 
 ```bash
-pnpm test          # vitest, all green (~99 tests)
+pnpm test          # vitest, full suite green
 pnpm build         # tsc clean
 ```
