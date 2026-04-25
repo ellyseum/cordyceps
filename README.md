@@ -101,7 +101,9 @@ Spawns a Claude session wired with cordy's MCP control plane and a manager syste
 
 ### MCP bridge — expose cordy to another agent
 
-A Claude Code, Codex, or any MCP client can treat cordy's control plane as a tool surface. Add `cordy mcp-stdio` to its MCP config:
+> **Experimental.** The bridge currently speaks line-delimited JSON-RPC, which is what Claude Code's MCP loader accepts. Stricter MCP clients may reject the framing; full MCP stdio framing is tracked for a future release.
+
+Claude Code can treat cordy's control plane as a tool surface. Add `cordy mcp-stdio` to its MCP config:
 
 ```jsonc
 // claude mcp-config entry

@@ -1,18 +1,20 @@
 /**
  * `cordy mcp-stdio` — MCP (Model Context Protocol) bridge over stdio.
  *
- * A Claude Code (or any MCP client) spawns this subcommand as an MCP server.
- * We speak MCP on stdin/stdout, translate tool calls into JSON-RPC calls
- * against a running cordy daemon, and return the results as MCP content.
+ * **Status: experimental.** Framing is line-delimited JSON-RPC, not the full
+ * MCP stdio framing. This works with current Claude Code as a tool surface;
+ * stricter MCP clients may reject the framing. Proper MCP stdio framing is
+ * tracked for a future release.
  *
- * This is how an in-Claude agent gets first-class access to cordy's control
- * plane — spawn peers, submit prompts, read transcripts — without any
- * cordy-specific wiring inside Claude.
+ * The bridge speaks JSON-RPC on stdin/stdout, translates tool calls into
+ * JSON-RPC calls against a running cordy daemon, and returns the results as
+ * MCP content. This is how an in-Claude agent gets first-class access to
+ * cordy's control plane — spawn peers, submit prompts, read transcripts —
+ * without any cordy-specific wiring inside Claude.
  *
- * Discovery: the bridge connects to the latest-running cordy daemon via the
- * standard instance file under ~/.cordyceps/instances/. If no daemon is
- * running, it errors on the initialize response so the client sees a
- * meaningful message.
+ * Discovery: connects to the latest-running cordy daemon via the standard
+ * instance file under ~/.cordyceps/instances/. If no daemon is running, it
+ * errors on the initialize response so the client sees a meaningful message.
  */
 
 import { createInterface } from "node:readline";
