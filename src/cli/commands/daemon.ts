@@ -56,11 +56,16 @@ async function start(args: string[]): Promise<number> {
     return 1;
   }
 
-  // Build forwarded args
+  // Build forwarded args. Audit defaults to off; --audit / --audit-dir opt in.
   const forwardedArgs: string[] = [];
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--port" && args[i + 1]) {
+    const a = args[i];
+    if (a === "--port" && args[i + 1]) {
       forwardedArgs.push("--port", args[++i]);
+    } else if (a === "--audit") {
+      forwardedArgs.push("--audit");
+    } else if (a === "--audit-dir" && args[i + 1]) {
+      forwardedArgs.push("--audit-dir", args[++i]);
     }
   }
 

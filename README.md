@@ -213,7 +213,7 @@ When a CLI's output format changes, the fix lives in its driver directory (parse
 
 ## Persistence + security
 
-- `~/.cordyceps/` (mode `0700`) — daemon state, instance files, audit logs
+- `~/.cordyceps/` (mode `0700`) — daemon state, instance files, optional audit logs (opt-in via `--audit`)
 - `~/.cordyceps/env` (mode `0600`, auto-created 0600 if found looser) — optional env-file auto-loaded at daemon start. Shell env wins over file values. Useful for driver API keys like `GEMINI_API_KEY`. Can override path via `CORDY_ENV_FILE=…`. Per-repo override: `<repo>/.cordyceps/env`.
 - `~/.cordyceps/instances/{pid}.json` (mode `0600`, atomic writes) — discovery for the `cordy` client
 - `<repo>/.cordyceps/` — per-repo artifacts. Cordyceps creates `.cordyceps/.gitignore` (containing `*`) on first write but never modifies the repo's own `.gitignore`.

@@ -26,6 +26,11 @@ export interface EngineOpts {
   configPath?: string;
   /** Optional explicit token (otherwise auto-generated) */
   token?: string;
+  /**
+   * Plugin flag overrides keyed by plugin name (or "*" applies to all).
+   * Sourced from CLI flags parsed at daemon start.
+   */
+  flagOverrides?: Record<string, Record<string, unknown>>;
 }
 
 export interface RunningEngine {
@@ -77,6 +82,7 @@ export async function startEngine(opts: EngineOpts = {}): Promise<RunningEngine>
     logger,
     cwd: process.cwd(),
     pluginConfigs: config.plugins ?? {},
+    flagOverrides: opts.flagOverrides,
   });
 
   // Register our instance file so external clients can find us

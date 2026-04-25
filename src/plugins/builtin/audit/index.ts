@@ -1,6 +1,11 @@
 /**
  * Audit plugin — JSONL trail of agent activity.
  *
+ * **Default: disabled.** Audit logging persists agent messages to disk; that
+ * surprises users who don't expect it. Opt in explicitly via `--audit` or by
+ * passing `--audit-dir <path>`. Programmatic use: set `auditDir` or
+ * `enabled: true` in the plugins.audit settings block.
+ *
  * Reference implementation showing both halves of the plugin contract:
  *   - bus subscriptions (auto-cleaned via ctx.subscribe)
  *   - method registration (audit.tail) for client queries
@@ -20,22 +25,23 @@ interface AuditEntry {
   data: unknown;
 }
 
-let auditDir = DEFAULT_DIR;
+let auditDir: string | undefined;
 
 const plugin: CordycepsPlugin = {
   name: "audit",
-  description: "JSONL audit trail for all agent activity",
+  description: "JSONL audit trail for agent activity (opt-in)",
   version: "1.0.0",
   order: { priority: 10 },  // load after core/transport, before user plugins
 
   flags: [
-    { name: "--no-audit", type: "boolean", default: false, description: "Disable audit logging for this run" },
-    { name: "--audit-dir", type: "string", description: "Override audit directory" },
+    { name: "--audit", type: "boolean", default: false, description: "Enable audit logging (default: disabled)" },
+    { name: "--audit-dir", type: "string", description: "Enable audit logging and write to this directory" },
   ],
 
   methods: {
-    /** audit.tail — fetch most recent N entries, optionally filtered by kind */
+    /** audit.tail — fetch most recent N entries, optionally filtered by kind. Empty if audit is disabled. */
     async "audit.tail"(params) {
+      if (!auditDir) return [];
       const p = (params ?? {}) as { limit?: number; kind?: string };
       const limit = Math.min(Math.max(p.limit ?? 50, 1), 1000);
       return readRecent(auditDir, limit, p.kind);
@@ -43,24 +49,29 @@ const plugin: CordycepsPlugin = {
   },
 
   async init(ctx: PluginContext) {
-    if (ctx.config.flags["--no-audit"] === true) {
-      ctx.logger.info("audit", "disabled via --no-audit");
+    const explicitDir =
+      (ctx.config.flags["--audit-dir"] as string | undefined) ??
+      (ctx.config.settings["auditDir"] as string | undefined);
+    const enabled =
+      ctx.config.flags["--audit"] === true ||
+      ctx.config.settings["enabled"] === true ||
+      explicitDir != null;
+
+    if (!enabled) {
+      ctx.logger.info("audit", "disabled (pass --audit or --audit-dir to enable)");
       return;
     }
 
-    const dir =
-      (ctx.config.flags["--audit-dir"] as string | undefined) ??
-      (ctx.config.settings["auditDir"] as string | undefined) ??
-      DEFAULT_DIR;
-
+    const dir = explicitDir ?? DEFAULT_DIR;
     auditDir = dir;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     try { chmodSync(dir, 0o700); } catch { /* ignore */ }
 
+    const writeDir = dir;
     const write = (kind: string, data: unknown) => {
       const ts = new Date().toISOString();
       const entry: AuditEntry = { ts, kind, data };
-      const file = join(dir, `${ts.slice(0, 10)}.jsonl`);
+      const file = join(writeDir, `${ts.slice(0, 10)}.jsonl`);
       try {
         appendFileSync(file, JSON.stringify(entry) + "\n", { mode: 0o600 });
         ctx.notify("audit.entry.written", entry);
