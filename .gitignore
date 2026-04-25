@@ -11,6 +11,7 @@ coverage/
 # Local-only / scratch
 specs/cordyceps-v1.md
 .context/
+.claude/
 *.swp
 .idea/
 .vscode/
