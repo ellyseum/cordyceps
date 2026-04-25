@@ -91,7 +91,6 @@ export class ClaudeDriver implements Driver {
     const warnings: string[] = [];
     const capabilities: Record<string, boolean> = {};
     let version: string | undefined;
-    const path: string | undefined = undefined;
 
     // Skip a separate `which` call (POSIX-only). The OS PATH lookup happens
     // inside execFileSync; ENOENT means the binary isn't installed.
@@ -138,7 +137,6 @@ export class ClaudeDriver implements Driver {
     return {
       available: true,
       version,
-      path,
       capabilities,
       warnings,
       supportedModes,

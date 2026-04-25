@@ -45,7 +45,6 @@ export class CodexDriver implements Driver {
   async probe(): Promise<DriverProbe> {
     let available = false;
     let version: string | undefined;
-    const path: string | undefined = undefined;
     const warnings: string[] = [];
 
     // Skip `which`; let execFileSync resolve PATH and rely on ENOENT.
@@ -83,7 +82,6 @@ export class CodexDriver implements Driver {
     return {
       available,
       version,
-      path,
       capabilities: {
         exec: available,
         pty: false,                   // not shipped yet

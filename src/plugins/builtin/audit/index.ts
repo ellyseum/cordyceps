@@ -52,13 +52,16 @@ const plugin: CordycepsPlugin = {
   },
 
   async init(ctx: PluginContext) {
+    // Single enable switch:
+    //   --audit                    boolean flag → enable, default audit dir
+    //   --audit-dir <path>         flag → enable, custom dir
+    //   plugins.audit.auditDir     config setting → enable, custom dir
+    // The plugin-loader's `enabled: false` already prevents init from running
+    // at all, so we don't double-up on a settings.enabled bit here.
     const explicitDir =
       (ctx.config.flags["--audit-dir"] as string | undefined) ??
       (ctx.config.settings["auditDir"] as string | undefined);
-    const enabled =
-      ctx.config.flags["--audit"] === true ||
-      ctx.config.settings["enabled"] === true ||
-      explicitDir != null;
+    const enabled = ctx.config.flags["--audit"] === true || explicitDir != null;
 
     if (!enabled) {
       ctx.logger.info("audit", "disabled (pass --audit or --audit-dir to enable)");

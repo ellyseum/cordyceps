@@ -59,7 +59,6 @@ export interface Driver {
 export interface DriverProbe {
   available: boolean;
   version?: string;
-  path?: string;
   /** Driver-defined capability flags (e.g. `bareMode`, `mcpConfig`, `appServer`) */
   capabilities: Record<string, boolean>;
   warnings: string[];
