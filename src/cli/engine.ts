@@ -18,8 +18,7 @@ import { startTransport, type TransportServer } from "../transport/server.js";
 import { generateToken } from "../transport/auth.js";
 import { writeInstance, removeInstance } from "../daemon/instances.js";
 import { discoverBuiltins, loadAll, destroyPlugin, type LoadedPlugin } from "../plugins/loader.js";
-
-const VERSION = "0.4.8";
+import { VERSION } from "../core/version.js";
 
 export interface EngineOpts {
   port?: number;
