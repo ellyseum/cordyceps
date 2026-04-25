@@ -9,10 +9,10 @@
  *
  * Plus task glyphs (◼/◻/✔) and blocking detection (y/n prompts).
  *
- * Ported from claudio/src/builtin/session-parser.ts. Key changes:
- *   - No bus-publish side effects — returns ParseResult instead
- *   - Stateless interface: state lives on the runtime, parser mutates a copy
- *   - Updated for Claude Code 2.x 6-mode permission surface
+ * The parser is side-effect-free: it returns a `ParseResult` rather than
+ * publishing on the bus, so runtimes can buffer state across feeds without
+ * coupling to the transport. Updated for Claude Code 2.x's six-mode
+ * permission surface.
  */
 
 import { ansiToText } from "../../core/ansi.js";
@@ -20,7 +20,7 @@ import type { AgentState, AssistantMessage, BlockKind } from "../../agents/types
 import type { DriverParser, ParseResult, ParserEvent } from "../api.js";
 import { CLAUDE_TUI } from "./tui.js";
 
-// ── Regexes lifted from claudio session-parser ──────────────────────────
+// ── TUI render regexes ──────────────────────────────────────────────────
 
 // Full mode line with file counts (seen when Claude has edited/read files):
 //   "⏵⏵ bypass permissions on main · 12 files +4 -3"

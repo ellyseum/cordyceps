@@ -1,12 +1,11 @@
 /**
  * ClaudeControl — high-level operations for the Claude driver.
  *
- * Ported from claudio/src/recipes/catalog.ts. Each method is a small script:
- * clear input, type, enter, wait for state to transition. Timing constants
- * are the same ones claudio validated empirically.
+ * Each method is a small script: clear input, type, enter, wait for state
+ * to transition. Timing constants are calibrated against Claude Code 2.x.
  *
  * Permission-mode handling uses `switchMode` (runtime Shift+Tab); prefer
- * `--permission-mode` at spawn time where possible (6 valid values — see
+ * `--permission-mode` at spawn time where possible (six valid values — see
  * CLAUDE_TUI.permissionModes).
  */
 

@@ -7,3 +7,10 @@ dist/
 # Test artifacts
 coverage/
 .cordyceps/
+
+# Local-only / scratch
+specs/cordyceps-v1.md
+.context/
+*.swp
+.idea/
+.vscode/

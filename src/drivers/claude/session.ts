@@ -3,13 +3,14 @@
  *
  * Every cordyceps-spawned Claude agent gets a fresh UUID for --session-id
  * (unless the user explicitly sets resume/continue/sessionId). This keeps
- * JSONLs per-agent-per-cwd deterministic, which prevents the commingling
- * claudio solved via its CLAUDE_CONFIG_DIR sandbox.
+ * each agent's JSONL transcript per-agent-per-cwd, preventing the
+ * commingling that happens when multiple sessions share `~/.claude/projects/`.
  *
  * Optional CLAUDE_CONFIG_DIR sandbox is available via `profile.isolateConfig`
  * — it creates a per-agent directory with symlinks to ~/.claude/ (skipping
  * projects/, .credentials.json, .claude.json, settings.json) and a copy of
- * settings.json. Cheaper than claudio's version (no cred copy unless asked).
+ * settings.json. Credentials only get copied when `isolateAuth` is set;
+ * otherwise the agent inherits OAuth tokens through a symlink.
  */
 
 import { randomUUID } from "node:crypto";

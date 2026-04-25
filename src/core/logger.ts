@@ -5,9 +5,8 @@
  * Rotation: 5MB × 3 backups (.1 .2 .3)
  * Format: [ISO-ts] [LEVEL] [source] message
  *
- * Uses `appendFileSync` so a crash can't lose the last lines (matches
- * claudio's proven pattern). Rotation is lazy — checked on `initLogger`
- * and on every 100th write.
+ * Uses `appendFileSync` so a crash can't lose the last lines. Rotation is
+ * lazy — checked on `initLogger` and on every 100th write.
  */
 
 import { appendFileSync, mkdirSync, statSync, renameSync, existsSync, chmodSync } from "node:fs";

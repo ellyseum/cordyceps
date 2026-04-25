@@ -1,12 +1,10 @@
 /**
  * Claude Code TUI catalogue — key sequences, output patterns, mode vocabulary.
  *
- * Derived empirically from `--tui-capture` sessions against Claude Code 2.x.
- * When Claude ships a new TUI variant, the fix is here: update a regex or add
- * a key sequence, rebuild, tests pass, driver keeps working.
- *
- * Ported from claudio/src/tui-sequences.ts with updates for Claude Code 2.1.x
- * (6-mode permission surface, updated glyph set).
+ * Derived empirically from `--tui-capture` sessions against Claude Code 2.x
+ * (six-mode permission surface, updated glyph set). When Claude ships a new
+ * TUI variant, the fix is here: update a regex or add a key sequence,
+ * rebuild, tests pass, driver keeps working.
  */
 
 export const CLAUDE_TUI = {
