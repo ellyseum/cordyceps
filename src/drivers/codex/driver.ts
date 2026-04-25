@@ -45,22 +45,26 @@ export class CodexDriver implements Driver {
   async probe(): Promise<DriverProbe> {
     let available = false;
     let version: string | undefined;
-    let path: string | undefined;
+    const path: string | undefined = undefined;
     const warnings: string[] = [];
 
+    // Skip `which`; let execFileSync resolve PATH and rely on ENOENT.
     try {
-      const which = execFileSync("which", ["codex"], { encoding: "utf-8" }).trim();
-      if (which) { path = which; available = true; }
-    } catch { /* codex not on PATH */ }
+      const out = execFileSync("codex", ["--version"], { encoding: "utf-8", timeout: 5000 }).trim();
+      available = true;
+      // "codex-cli 0.121.0"
+      const m = out.match(/(\d+\.\d+\.\d+(?:-[\w.]+)?)/);
+      if (m) version = m[1];
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        // Binary exists but version probe glitched — still treat as available.
+        available = true;
+        warnings.push(`codex --version failed: ${(err as Error).message}`);
+      }
+    }
 
     if (available) {
-      try {
-        const out = execFileSync("codex", ["--version"], { encoding: "utf-8" }).trim();
-        // "codex-cli 0.121.0"
-        const m = out.match(/(\d+\.\d+\.\d+(?:-[\w.]+)?)/);
-        if (m) version = m[1];
-      } catch { /* ignore */ }
-
       // Check for auth
       const authPath = join(homedir(), ".codex", "auth.json");
       try { statSync(authPath); } catch {

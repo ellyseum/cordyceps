@@ -91,19 +91,19 @@ export class ClaudeDriver implements Driver {
     const warnings: string[] = [];
     const capabilities: Record<string, boolean> = {};
     let version: string | undefined;
-    let path: string | undefined;
+    const path: string | undefined = undefined;
 
-    try {
-      path = execFileSync("which", ["claude"], { encoding: "utf-8" }).trim() || undefined;
-    } catch {
-      return { available: false, capabilities, warnings: ["claude binary not found on PATH"], supportedModes: [] };
-    }
-
+    // Skip a separate `which` call (POSIX-only). The OS PATH lookup happens
+    // inside execFileSync; ENOENT means the binary isn't installed.
     try {
       const out = execFileSync("claude", ["--version"], { encoding: "utf-8", timeout: 5000 });
       const m = out.match(/(\d+\.\d+\.\d+)/);
       if (m) version = m[1];
     } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") {
+        return { available: false, capabilities, warnings: ["claude binary not found on PATH"], supportedModes: [] };
+      }
       warnings.push(`claude --version failed: ${(err as Error).message}`);
     }
 

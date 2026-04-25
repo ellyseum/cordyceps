@@ -39,21 +39,24 @@ export class GeminiDriver implements Driver {
   async probe(): Promise<DriverProbe> {
     let available = false;
     let version: string | undefined;
-    let path: string | undefined;
+    const path: string | undefined = undefined;
     const warnings: string[] = [];
 
+    // Skip `which`; let execFileSync resolve PATH and rely on ENOENT.
     try {
-      const which = execFileSync("which", ["gemini"], { encoding: "utf-8" }).trim();
-      if (which) { path = which; available = true; }
-    } catch { /* not on PATH */ }
+      const out = execFileSync("gemini", ["--version"], { encoding: "utf-8", timeout: 5000 }).trim();
+      available = true;
+      const m = out.match(/(\d+\.\d+\.\d+(?:-[\w.]+)?)/);
+      if (m) version = m[1];
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        available = true;
+        warnings.push(`gemini --version failed: ${(err as Error).message}`);
+      }
+    }
 
     if (available) {
-      try {
-        const out = execFileSync("gemini", ["--version"], { encoding: "utf-8" }).trim();
-        const m = out.match(/(\d+\.\d+\.\d+(?:-[\w.]+)?)/);
-        if (m) version = m[1];
-      } catch { /* ignore */ }
-
       // Soft-check auth. We can't verify without making an API call; just
       // warn if GEMINI_API_KEY is missing from the daemon's own env.
       if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENAI_USE_VERTEXAI && !process.env.GOOGLE_GENAI_USE_GCA) {
