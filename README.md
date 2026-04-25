@@ -1,78 +1,98 @@
 # Cordyceps
 
-**Local-first agent harness.** Spawns, drives, and coordinates PTY-based CLI coding agents through a JSON-RPC 2.0 control plane, a service bus, and a plugin architecture.
+[![npm version](https://img.shields.io/npm/v/@ellyseum/cordyceps.svg?style=flat-square)](https://www.npmjs.com/package/@ellyseum/cordyceps)
+[![CI](https://img.shields.io/github/actions/workflow/status/ellyseum/cordyceps/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/ellyseum/cordyceps/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Node ^20 || ^22](https://img.shields.io/badge/node-%5E20%20%7C%7C%20%5E22-brightgreen.svg?style=flat-square)](package.json)
 
-## What it is
+**Local-first agent harness.** A daemon that spawns and drives PTY-based CLI coding agents — Claude Code, Codex, Gemini, Ollama — through a single JSON-RPC 2.0 control plane. Every primitive a human invokes from the shell (spawn, submit, interrupt, approve, kill) is reachable over the same API a manager LLM uses to drive a fleet of peers.
 
-- **Daemon:** owns N live PTY agent sessions, exposes control over WebSocket JSON-RPC
-- **Driver layer:** one adapter per CLI family. Mode-aware (`pty`, `exec`, `server-ws`, `server-http`)
-- **Service bus:** in-process pub/sub + key/value state for inter-agent coordination
-- **Plugin system:** plugins register JSON-RPC methods, subscribe to bus events, emit notifications
-- **`cordy` CLI:** thin client; every subcommand is a JSON-RPC call to the daemon
+<!--
+  Demo asset placeholder. Recorded via asciinema and rendered to an inline
+  SVG with svg-term-cli; see assets/demo.cast for the source recording.
+  Replace this comment with `![demo](assets/demo.svg)` once the cast lands.
+-->
 
-## What it isn't
+## Why this exists
 
-- Not a human-facing TUI or web UI — pure agentic infrastructure
-- Not a provider SDK client (drives installed CLIs; no direct Anthropic/OpenAI/Google API calls)
+Most agent frameworks assume one model, one task, one process. Real agentic
+work is a fleet — a manager LLM driving peers, with humans escalated only
+when needed. The design insight that unlocked it: a manager LLM should be a
+peer client on the same control plane as a human operator, not a privileged
+special case. Once `spawn` / `submit` / `interrupt` / `approve` are reachable
+over a stable API, the manager gets everything the operator has — and a code
+review council, an MCP bridge, an autonomous repo grinder, and a deterministic
+test runner all fall out of the same plumbing.
 
-## The manager-agent pattern
-
-The agentic bit: a "manager" agent is just another client connected to the daemon's JSON-RPC API. Given a prompt, it spawns peer agents, drives them through work, responds to approvals, and tears them down. Gatekeeper, reviewer, orchestrator, human-in-the-loop escalator — these are all patterns that fall out of one LLM holding the steering wheel of a fleet.
-
-v1 is the plumbing that makes that possible. Every primitive (spawn, submit, interrupt, approve, bus event) is reachable over the same API surface a human uses from the shell, so a manager-LLM operating cordy has the same capability as operator driving it manually — the agent becomes a peer, not a special case.
-
-## Install
-
-```bash
-pnpm install
-pnpm build
-```
-
-For convenience, link `bin/cordy` onto your PATH or use `./bin/cordy` directly.
+Cordyceps is that plumbing. The PTY work is a backend detail; the control
+plane is the product.
 
 ## Quick start
 
 ```bash
-# Start the daemon (detached background process)
+# Install
+npm install -g @ellyseum/cordyceps
+
+# Start the daemon (loopback-only, bearer-auth WebSocket)
+cordy daemon start
+
+# Spawn a Claude agent (uses your normal Claude auth — OAuth, memory, hooks)
+cordy spawn claude --name smoke
+
+# Send a prompt; print the response
+cordy send smoke "respond with just: banana"
+
+# Inspect; clean up
+cordy state smoke
+cordy kill smoke
+cordy daemon stop
+```
+
+For one-shots without a persistent daemon: `cordy --ephemeral spawn claude --name once`.
+
+### Prerequisites
+
+- Node `^20 || ^22`.
+- `node-pty` is a native module. The npm registry ships prebuilt binaries
+  for common Node ABIs; on a system without a matching prebuild, install
+  needs Python 3 and a C++ toolchain (`build-essential` on Debian/Ubuntu,
+  Xcode CLT on macOS).
+- The CLI agents you want to drive (`claude`, `codex`, `gemini`, `ollama`)
+  must already be installed on `PATH`. Cordyceps is a harness — it doesn't
+  ship its own model access.
+
+### Install from source
+
+```bash
+git clone https://github.com/ellyseum/cordyceps
+cd cordyceps
+pnpm install
+pnpm build
 ./bin/cordy daemon start
-
-# Inspect what's running
-./bin/cordy daemon status
-./bin/cordy doctor
-
-# Spawn a Claude agent (uses your normal Claude auth — OAuth, memory, CLAUDE.md, hooks)
-./bin/cordy spawn claude --name smoke
-
-# Send it a prompt and get the response
-./bin/cordy send smoke "respond with just: banana"
-
-# Inspect state, transcript, bus
-./bin/cordy state smoke
-./bin/cordy transcript smoke
-./bin/cordy bus agent.
-
-# Clean up
-./bin/cordy kill smoke
-./bin/cordy daemon stop
 ```
 
-### Deterministic profile (for automation)
+## The manager-agent pattern
+
+The agentic bit: a "manager" agent is just another client connected to the
+daemon's JSON-RPC API. Given a prompt, it spawns peer agents, drives them
+through work, responds to approvals, and tears them down. Gatekeeper,
+reviewer, orchestrator, human-in-the-loop escalator — these all fall out of
+one LLM holding the steering wheel of a fleet.
+
+Every primitive is reachable over the same API surface a human uses from the
+shell, so a manager LLM operating cordy has the same capability as an
+operator driving it manually. The agent becomes a peer, not a special case.
 
 ```bash
-# --profile deterministic uses --bare + plan mode + Edit/Write/MultiEdit blocked
-./bin/cordy spawn claude --name reviewer --profile deterministic
+cordy manager "summarize the git log since last week"
 ```
 
-`--bare` mode requires API-key style auth (skips OAuth/keychain). Default profile is for general use.
+This spawns a Claude session wired with cordy's MCP bridge and a manager
+system prompt. The manager can spawn other agents (Codex for exec tasks,
+Gemini for search-heavy work, Ollama for cheap reasoning), coordinate their
+output, and report back. Press Ctrl+C to interrupt.
 
-### Ephemeral mode (one-shot, no persistent daemon)
-
-```bash
-./bin/cordy --ephemeral doctor
-./bin/cordy --ephemeral spawn claude --name once
-```
-
-### Code review council — multi-family reviewers with a chair
+## Code review council
 
 ```bash
 cordy council review src/core/bus.ts
@@ -82,31 +102,29 @@ cordy council diff --staged                     # only staged changes
 cordy council diff main..feature --scope src/   # branch comparison, scoped
 ```
 
-Spawns N reviewers from different driver families in parallel, each reviews in a silo (no reviewer sees another's output), then a chair agent synthesizes the findings into a prioritized markdown verdict. Default panel is `[claude, codex, gemini]`, default chair is `codex` (exec-mode output is cleaner than PTY synthesis tails).
+N reviewers from different driver families run in parallel, each in a silo
+(no reviewer sees another's output), then a chair agent synthesizes their
+findings into a prioritized markdown verdict. The whole point is
+heterogeneous training lineages — intra-family ensembles correlate their
+blind spots; inter-family councils don't.
 
-`review` operates on a whole file; `diff` reviews the changes shown by `git diff` (with `--no-ext-diff --no-textconv` for hostile-repo safety).
+`review` operates on a whole file; `diff` reviews the changes shown by `git
+diff` (with `--no-ext-diff --no-textconv --end-of-options` for hostile-repo
+safety). Tool-capable drivers (Claude PTY, Codex exec, Gemini exec) get a
+path-only prompt and read the file themselves; tool-less drivers fall back
+to inline mode with auto-chunking at ~30KB.
 
-**Tool-driven vs inline reviewers:** when a reviewer driver has file-access tools (Claude PTY, Codex exec, Gemini exec), the council sends it a **path-only prompt** and the agent Reads the file itself — including related imports/tests if useful. Drivers without tool access (Ollama server-http) fall back to **inline** mode where the source is stuffed into the prompt, auto-chunked at ~30KB boundaries. `--inline` forces inline for all reviewers. Diff mode is always inline (a diff is a synthesized artifact, not a file on disk).
+## MCP bridge — expose cordy to another agent
 
-The whole point is heterogeneous training lineages — intra-family ensembles correlate their blind spots; inter-family councils don't.
+> **Experimental.** The bridge currently speaks line-delimited JSON-RPC,
+> which is what Claude Code's MCP loader accepts. Stricter MCP clients may
+> reject the framing; full MCP stdio framing is tracked for a future release.
 
-### Manager agent — delegate tasks to a fleet
-
-```bash
-cordy manager "summarize the git log since last week"
-cordy manager --driver claude --model haiku-4-5 "write a unit test for src/core/bus.ts"
-```
-
-Spawns a Claude session wired with cordy's MCP control plane and a manager system prompt. The manager is a peer agent — it can spawn other agents (Codex for exec tasks, Ollama for cheap reasoning, Gemini for search-heavy work), coordinate their output, and report back. Press Ctrl+C to interrupt; the spawned agent is killed.
-
-### MCP bridge — expose cordy to another agent
-
-> **Experimental.** The bridge currently speaks line-delimited JSON-RPC, which is what Claude Code's MCP loader accepts. Stricter MCP clients may reject the framing; full MCP stdio framing is tracked for a future release.
-
-Claude Code can treat cordy's control plane as a tool surface. Add `cordy mcp-stdio` to its MCP config:
+Add `cordy mcp-stdio` to a Claude Code MCP config, and the agent gains
+delegated authority to spawn peers and drive them via tool calls
+(`cordy_agents_spawn`, `cordy_agents_submit`, `cordy_drivers_list`, …):
 
 ```jsonc
-// claude mcp-config entry
 {
   "mcpServers": {
     "cordy": { "command": "cordy", "args": ["mcp-stdio"] }
@@ -114,35 +132,25 @@ Claude Code can treat cordy's control plane as a tool surface. Add `cordy mcp-st
 }
 ```
 
-Now the spawned agent can call `cordy_agents_spawn`, `cordy_agents_submit`, `cordy_drivers_list`, etc. — i.e. it has delegated authority to spawn peer agents and drive them. This is the substrate for manager-agent patterns.
+This is the substrate for manager-agent patterns from inside another LLM
+session.
 
-### Capturing PTY output (for fixture generation)
+## Drivers
 
-When a driver's parser drifts against a new CLI release, capture the raw PTY stream and feed it back as a regression fixture:
+| Driver | Family | Modes | Notes |
+|--------|--------|-------|-------|
+| `claude-code` | Anthropic | `pty`, `exec` | Interactive TUI (`pty`) or one-shot via `claude --print` (`exec`). PTY supports approve / reject / mode-switch; exec is cleaner for one-shot prompts and council reviewers. |
+| `codex` | OpenAI | `exec` | `codex exec --json --skip-git-repo-check` |
+| `gemini` | Google | `exec` | `gemini -p … --output-format stream-json`; needs `GEMINI_API_KEY` in the daemon env |
+| `ollama` | local | `server-http` | Streams NDJSON from `/api/generate`; needs a local Ollama daemon (`ollama serve`). Free for local models. |
 
-```bash
-./bin/cordy spawn claude --name drift
-./bin/cordy capture drift --duration 30 &
-./bin/cordy send drift "small repro"
-# → .cordyceps/captures/drift-<ts>.jsonl  (meta + output + state + message lines)
-```
+Drivers declare their modes; the `AgentManager` runtime registry maps each
+mode to a controller plugin without core changes. Adding a new CLI family
+is a driver (plus a runtime plugin if it speaks an unsupported protocol);
+nothing in the bus, transport, or existing drivers needs to change.
 
-Each line is one event. The `meta` header records the driver id, driver version, CLI version, and the driver's tested range (`supportedVersions`). The file mode is `0600`; the directory self-ignores via `.cordyceps/.gitignore`.
-
-### Fixture replay (parser regression guard)
-
-Captures drop into `test/fixtures/<driver>/<version>/` and feed back through the parser in CI:
-
-```ts
-import { loadCapture, replay } from "../fixtures/replay.js";
-import { ClaudeParser } from "../../src/drivers/claude/parser.js";
-
-const cap = loadCapture("test/fixtures/claude/v2.1.114/basic-hello.jsonl");
-const { finalState, messages } = replay(cap, new ClaudeParser());
-// assert messages + finalState match recorded live values
-```
-
-When a CLI release shifts glyph spacing, mode-line shape, or spinner frames, the fixture breaks on the next `pnpm test` and the fix lives in the driver directory.
+See [`docs/DRIVERS.md`](docs/DRIVERS.md) for the parser/control protocol and
+how to add one.
 
 ## Architecture
 
@@ -163,63 +171,81 @@ When a CLI release shifts glyph spacing, mode-line shape, or spinner frames, the
 │        ▼      ┌───────────┼───────────┐                      │
 │  WS clients   ▼           ▼           ▼                      │
 │       ┌───────────┐┌────────────┐┌────────────┐              │
-│       │PtyAgent   ││PtyAgent    ││PtyAgent    │              │
-│       │Controller ││Controller  ││Controller  │              │
+│       │  Pty      ││   Exec     ││ ServerHttp │              │
+│       │Controller ││ Controller ││ Controller │              │
 │       └─────┬─────┘└─────┬──────┘└─────┬──────┘              │
 │             ▼            ▼             ▼                     │
 │       ┌─────────┐  ┌─────────┐   ┌─────────┐                 │
-│       │  PTY    │  │  PTY    │   │  PTY    │                 │
-│       │(agent)  │  │(agent)  │   │(agent)  │                 │
+│       │  PTY    │  │  exec   │   │  HTTP   │                 │
+│       │(agent)  │  │(agent)  │   │(server) │                 │
 │       └─────────┘  └─────────┘   └─────────┘                 │
 └──────────────────────────────────────────────────────────────┘
 
   HTTP /health        — liveness probe (no auth)
-  WS   /rpc           — JSON-RPC 2.0 (bearer token via ?token=)
+  WS   /rpc           — JSON-RPC 2.0 (Authorization: Bearer <token>)
 ```
 
-### The two keystone patterns
+Two keystone patterns:
 
-1. **Service Bus** (`src/core/bus.ts`) — pub/sub events + flat key-value state. `on()` returns an unsubscribe handle so plugins can clean up cleanly. Plugins coordinate through agreed-upon bus key prefixes; nothing imports across plugins.
+- **Service Bus** (`src/core/bus.ts`) — pub/sub events + flat key-value
+  state. `on()` returns an unsubscribe handle so plugins clean up cleanly.
+  Plugins coordinate through agreed bus-key prefixes; nothing imports
+  across plugins.
+- **Plugin architecture** (`src/plugins/api.ts`) — every extension is a
+  `CordycepsPlugin` declaring `methods`, lifecycle hooks, and bus
+  subscriptions. Loaded in priority groups with topological sort. The
+  `audit` plugin is the reference implementation.
 
-2. **Plugin Architecture** (`src/plugins/api.ts`) — every extension is a `CordycepsPlugin` declaring `methods` (JSON-RPC handlers), `subcommands`, `flags`, and lifecycle hooks. Loaded in priority groups with topological sort within each group. The audit plugin (`src/plugins/builtin/audit/`) is the reference implementation.
+For Mermaid diagrams of the spawn / send / response flow and the
+manager-agent sequence, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+JSON-RPC method reference: [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
-### JSON-RPC over WebSocket
+## Notable design decisions
 
-One bidirectional channel handles control + streaming. Methods are namespaced (`agents.*`, `drivers.*`, `bus.*`, `daemon.*`, plus plugin-specific). Notifications use the same namespace. Clients control their own subscription allowlist via `notifications.subscribe`/`unsubscribe`.
+**Manager as peer, not special case.** The same JSON-RPC surface that powers
+the `cordy` CLI also powers manager LLMs talking through `cordy mcp-stdio`.
+A manager has zero capabilities beyond what an operator has — which means
+every shell workflow tested manually maps directly to an agent's behavior.
 
-Default subscriptions on connect: `agent.created`, `agent.state`, `agent.message`, `agent.blocked`, `agent.idle`, `agent.exited`, `plugin.ready`, `daemon.stopping`. The high-volume `agent.output` stream is opt-in.
+**Glyph-based state machine over regex scraping.** PTY output is messy:
+escape sequences, partial writes, spinner frames over the same cursor
+position. The Claude parser walks Unicode glyphs (`●` message, `⎿` result,
+`⏵`/`⏸` mode) as state-machine transitions and ships a fixture-replay
+harness as a regression net. Regex would have to handle every render-time
+race; a state machine fed by the actual TTY stream doesn't.
 
-## Driver layer
+**Bus-coordinated plugins.** Plugins talk through `bus.on()` / `bus.emit()`
+rather than importing each other's types. That keeps the plugin set
+loosely coupled, lets the loader topo-sort by declared `order`, and makes
+hot-load / unload practical without a registry refactor.
 
-Drivers declare modes (`pty`, `exec`, `server-ws`, `server-http`). The `AgentManager` has a runtime factory registry — runtimes for each mode are added by plugins via `manager.registerRuntime(mode, factory)` without touching core. Adding a new CLI family is a driver plus (if needed) a runtime plugin; nothing in the bus, plugin API, transport, or existing drivers has to change.
+## What it isn't
 
-Built-in drivers:
+- Not a human-facing TUI or web UI — pure agentic infrastructure.
+- Not a provider SDK client (drives installed CLIs; no direct
+  Anthropic / OpenAI / Google API calls). The trade-off is that you bring
+  your own auth and pay for whatever the underlying CLI bills you for.
+- Not a multi-machine orchestrator — the daemon is loopback-only by design.
 
-| Driver | Modes | Notes |
-|--------|-------|-------|
-| `claude-code` | `pty`, `exec` | Interactive TUI (`pty`) or one-shot via `claude --print` (`exec`). PTY supports approve/reject/mode-switch; exec is faster and cleaner for one-shot prompts. |
-| `codex` | `exec` | `codex exec --json --skip-git-repo-check` |
-| `gemini` | `exec` | `gemini -p … --output-format stream-json`; needs `GEMINI_API_KEY` in daemon env |
-| `ollama` | `server-http` | Streams NDJSON from `/api/generate`; needs local daemon (`ollama serve`) |
+## Persistence and security
 
-The Claude driver at `src/drivers/claude/` is the exemplar for PTY-backed drivers:
-- `driver.ts` — `claude --bare`, `--session-id <uuid>`, `--permission-mode <mode>`, etc.
-- `parser.ts` — glyph-based state machine (`●` message, `⎿` result, spinner family, `⏵`/`⏸` mode)
-- `control.ts` — `submit`/`interrupt`/`approve`/`reject`/`switchModel`/`switchMode`
-- `session.ts` — fresh UUID per agent for `--session-id`; optional `CLAUDE_CONFIG_DIR` sandbox via `profile.isolateConfig`
-- `tui.ts` — key sequences and patterns
-
-When a CLI's output format changes, the fix lives in its driver directory (parser, control, or `tui.ts`). `cordy capture` + the fixture-replay harness (`test/fixtures/replay.ts`) catch drift in CI.
-
-## Persistence + security
-
-- `~/.cordyceps/` (mode `0700`) — daemon state, instance files, optional audit logs (opt-in via `--audit`)
-- `~/.cordyceps/env` (mode `0600`, auto-created 0600 if found looser) — optional env-file auto-loaded at daemon start. Shell env wins over file values. Useful for driver API keys like `GEMINI_API_KEY`. Can override path via `CORDY_ENV_FILE=…`. Per-repo override: `<repo>/.cordyceps/env`.
-- `~/.cordyceps/instances/{pid}.json` (mode `0600`, atomic writes) — discovery for the `cordy` client
-- `<repo>/.cordyceps/` — per-repo artifacts. Cordyceps creates `.cordyceps/.gitignore` (containing `*`) on first write but never modifies the repo's own `.gitignore`.
-- Loopback-only transport (`127.0.0.1`)
-- 192-bit bearer token, regenerated per daemon start
-- WS auth failure → close code 1008 (no JSON-RPC session ever begins)
+- `~/.cordyceps/` (mode `0700`) — daemon state, instance files, optional
+  audit logs (opt-in via `--audit`).
+- `~/.cordyceps/instances/{pid}.json` (mode `0600`, atomic writes) — the
+  client uses these to discover the running daemon and read its bearer
+  token. The token is regenerated on every daemon start.
+- `~/.cordyceps/env` (mode `0600`) — optional env file auto-loaded at
+  daemon start. Shell env wins over file values. Useful for driver API
+  keys like `GEMINI_API_KEY`. Override the path via `CORDY_ENV_FILE`;
+  per-repo override is `<repo>/.cordyceps/env`.
+- Loopback-only transport (`127.0.0.1`); upgrade rejects non-loopback
+  Host / Origin headers as defense in depth.
+- 192-bit bearer token (`base64url` of 24 random bytes), regenerated per
+  daemon start, presented via `Authorization: Bearer <token>` on the
+  upgrade request.
+- The bearer token is shell-execution-equivalent — anyone who reads it can
+  spawn arbitrary subprocess via cordy's spawn API. Treat it like an SSH
+  key.
 
 ## Tests
 
@@ -227,3 +253,27 @@ When a CLI's output format changes, the fix lives in its driver directory (parse
 pnpm test          # vitest, full suite green
 pnpm build         # tsc clean
 ```
+
+When a CLI release shifts glyph spacing, mode-line shape, or spinner
+frames, the fixture-replay harness in `test/fixtures/` catches the drift
+on the next test run and the fix lives in the relevant driver's directory.
+
+## Status
+
+Pre-1.0. Ships a working daemon, four built-in drivers, the council and
+manager plugins, an MCP stdio bridge (experimental framing), and the
+plugin / runtime registries. See [`STATUS.md`](STATUS.md) for what's in
+progress and what's sketched.
+
+## Contributing
+
+Issues and PRs welcome. Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+first if you're touching anything beyond a typo; touching a driver,
+[`docs/DRIVERS.md`](docs/DRIVERS.md); touching a plugin,
+[`docs/PLUGINS.md`](docs/PLUGINS.md).
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+Built by [Jocelyn Ellyse](https://github.com/ellyseum).
