@@ -29,11 +29,15 @@ export async function runSpawn(args: string[]): Promise<number> {
     }
   }
 
+  // Default cwd to the caller's working directory so spawn behavior doesn't
+  // depend on where `cordy daemon start` was run.
+  const effectiveCwd = cwd ?? process.cwd();
+
   const client = await connect();
   try {
     const info = await client.call<{ id: string; driverId: string; mode: string; cwd: string; status: string }>(
       "agents.spawn",
-      { driverId, id, cwd, profile },
+      { driverId, id, cwd: effectiveCwd, profile },
     );
     process.stdout.write(`Spawned: ${info.id} (driver=${info.driverId}, mode=${info.mode}, cwd=${info.cwd})\n`);
     return 0;

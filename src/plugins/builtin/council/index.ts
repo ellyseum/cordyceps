@@ -43,6 +43,8 @@ interface ReviewerSpec {
 interface CouncilParams {
   /** Path to file under review. Mutually exclusive with diff. */
   path?: string;
+  /** Caller's cwd; relative `path` resolves against this. Defaults to daemon cwd. */
+  cwd?: string;
   /** Diff-mode review. Mutually exclusive with path. */
   diff?: DiffParams;
   panel?: ReviewerSpec[];
@@ -666,8 +668,11 @@ const plugin: CordycepsPlugin = {
         }
       } else {
         mode = "file";
-        // stat-and-size-check BEFORE reading (council 2026-04-19 meta-review)
-        const absPath = resolveTargetPath(p.path!, ctx.cwd, p.noChunk ?? false);
+        // Resolve relative paths against the caller's cwd if provided, so
+        // `cordy council review src/foo.ts` works regardless of where the
+        // daemon was started. Falls back to daemon cwd for backward compat.
+        const reviewCwd = p.cwd ?? ctx.cwd;
+        const absPath = resolveTargetPath(p.path!, reviewCwd, p.noChunk ?? false);
         try {
           source = readFileSync(absPath, "utf-8");
         } catch (err) {

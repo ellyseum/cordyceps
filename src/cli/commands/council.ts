@@ -112,7 +112,7 @@ async function runFileReview(f: Flags): Promise<number> {
 
     const result = await client.call<CouncilResult>(
       "council.review",
-      { path, panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk, forceInline: f.inline },
+      { path, cwd: process.cwd(), panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk, forceInline: f.inline },
       (f.timeoutMs ?? 180_000) * 4 + 120_000,
     );
     printSummary(result, f.asJson);
