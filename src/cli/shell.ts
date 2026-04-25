@@ -14,6 +14,7 @@ import { runList } from "./commands/list.js";
 import { runState } from "./commands/state.js";
 import { runKill } from "./commands/kill.js";
 import { runInterrupt } from "./commands/interrupt.js";
+import { runApprove, runReject } from "./commands/approve.js";
 import { runTranscript } from "./commands/transcript.js";
 import { runBus } from "./commands/bus.js";
 import { runDoctor } from "./commands/doctor.js";
@@ -39,6 +40,8 @@ Agents:
   cordy transcript <id> [--last N] [--json]
   cordy kill <id>
   cordy interrupt <id>
+  cordy approve <id>                  Approve a pending tool / permission request
+  cordy reject <id>                   Reject a pending tool / permission request
 
 Interaction:
   cordy send <id> "<prompt>" [--timeout N] [--no-wait]
@@ -101,6 +104,10 @@ async function main(): Promise<void> {
       process.exit(await runKill(rest));
     case "interrupt":
       process.exit(await runInterrupt(rest));
+    case "approve":
+      process.exit(await runApprove(rest));
+    case "reject":
+      process.exit(await runReject(rest));
     case "transcript":
       process.exit(await runTranscript(rest));
     case "bus":

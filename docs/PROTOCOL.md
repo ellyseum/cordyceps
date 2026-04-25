@@ -19,7 +19,7 @@ The daemon writes an instance file on start:
   "token": "<base64url-32char>",
   "port": 3247,
   "startedAt": "2026-04-28T...",
-  "version": "0.5.0"
+  "version": "0.5.0"   // example — actual value comes from package.json
 }
 ```
 
@@ -75,22 +75,49 @@ Standard JSON-RPC 2.0 over text frames:
 { "jsonrpc": "2.0", "method": "agent.message", "params": { "agentId": "foo", "message": { … } } }
 ```
 
-## Method namespaces
+## Method reference
 
-| Namespace        | Examples                                      | Purpose                                      |
-|------------------|-----------------------------------------------|----------------------------------------------|
-| `daemon.*`       | `daemon.health`, `daemon.stop`                | Daemon-level control.                        |
-| `drivers.*`      | `drivers.list`, `drivers.probe`               | Driver introspection.                        |
-| `agents.*`       | `agents.list`, `agents.spawn`, `agents.submit`, `agents.interrupt`, `agents.approve`, `agents.kill` | Lifecycle and I/O for individual agents.     |
-| `bus.*`          | `bus.get`, `bus.set`, `bus.keys`              | Read / write the in-process KV state.        |
-| `notifications.*`| `notifications.subscribe`, `notifications.unsubscribe` | Per-client subscription allowlist.           |
-| `audit.*`        | `audit.tail`                                  | Optional plugin (opt-in via `--audit`).      |
-| `council.*`      | `council.review`                              | Code review council plugin.                  |
-| `manager.*`      | `manager.spawn`, `manager.tasks`              | Manager plugin (Claude-only at present).     |
-| `peer.*`         | `peer.list`                                   | Peer-coordination plugin.                    |
+This table is hand-maintained; the source of truth is
+`src/transport/methods.ts` (core) and the `methods` map of each plugin
+under `src/plugins/builtin/`. If something here disagrees with the code,
+the code wins — open an issue.
 
-For exact parameter shapes, the source of truth is `src/transport/methods.ts`
-(core methods) and the `methods` map of each plugin in `src/plugins/builtin/`.
+### Core (`src/transport/methods.ts`)
+
+| Method                       | Purpose                                                       |
+|------------------------------|---------------------------------------------------------------|
+| `daemon.health`              | Liveness + version + currently registered drivers + methods. |
+| `daemons.list`               | Enumerate alive daemon instances on this machine.            |
+| `agents.list`                | Snapshot of every registered agent.                          |
+| `agents.spawn`               | Create a new agent. Params: `driverId`, `id?`, `cwd?`, `profile?`, `env?`. |
+| `agents.get`                 | Look up one agent by id.                                     |
+| `agents.kill`                | Send terminate to one agent.                                 |
+| `agents.state`               | Current state (`idle` / `busy` / `blocked` / `exited` / …).  |
+| `agents.transcript`          | Full transcript or last N entries.                           |
+| `agents.submit`              | Send a prompt; resolves on idle. Params: `id`, `prompt`, `timeoutMs?`, `expectMessage?`, `interruptIfBusy?`. |
+| `agents.interrupt`           | Cancel current work.                                         |
+| `agents.approve`             | Approve a pending tool / permission request.                 |
+| `agents.reject`              | Reject a pending tool / permission request.                  |
+| `agents.raw`                 | Write raw bytes into the agent's input (driver-specific).    |
+| `drivers.list`               | Every registered driver with its probe result.               |
+| `drivers.get`                | One driver's probe result by id.                             |
+| `bus.get`                    | Read one bus key.                                            |
+| `bus.getByPrefix`            | Read all bus keys under a prefix.                            |
+| `notifications.subscribe`    | Add events to this client's notification allowlist.          |
+| `notifications.unsubscribe`  | Remove events from this client's allowlist.                  |
+
+The bus is read-only over the wire — there's no `bus.set` exposed. Plugins
+mutate the bus from inside the daemon process.
+
+### Built-in plugins
+
+| Method                       | Plugin    | Purpose                                                  |
+|------------------------------|-----------|----------------------------------------------------------|
+| `audit.tail`                 | audit     | Last N audit entries, optionally filtered by kind. Returns `[]` when audit is disabled. |
+| `council.review`             | council   | Multi-family code review with chair synthesis.           |
+| `manager.spawn`              | manager   | Spawn a manager agent wired with the cordy MCP bridge.   |
+| `peer.ask`                   | peer      | Ask a one-shot prompt of another running agent.          |
+| `peer.tell`                  | peer      | Forward a fire-and-forget message to another agent.      |
 
 ## Default subscriptions
 
