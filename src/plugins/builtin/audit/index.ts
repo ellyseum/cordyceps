@@ -17,7 +17,10 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { CordycepsPlugin, PluginContext } from "../../api.js";
 
-const DEFAULT_DIR = join(homedir(), ".cordyceps", "audit");
+/** Computed lazily so tests can redirect via process.env.HOME. */
+function defaultAuditDir(): string {
+  return join(homedir(), ".cordyceps", "audit");
+}
 
 interface AuditEntry {
   ts: string;
@@ -62,7 +65,7 @@ const plugin: CordycepsPlugin = {
       return;
     }
 
-    const dir = explicitDir ?? DEFAULT_DIR;
+    const dir = explicitDir ?? defaultAuditDir();
     auditDir = dir;
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     try { chmodSync(dir, 0o700); } catch { /* ignore */ }

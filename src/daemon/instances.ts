@@ -1,20 +1,21 @@
 /**
  * Instance discovery — `~/.cordyceps/instances/{pid}.json`.
  *
- * Per the security posture (§12 of plan):
+ * Security posture:
  *   - `~/.cordyceps/` and `instances/` created with mode 0700
  *   - Instance files written with mode 0600
  *   - Atomic writes (tmp + rename) so external readers never see partial tokens
  *   - On daemon stop, instance file is unlinked
  *   - Stale entries (PID no longer alive) cleaned up on read
+ *
+ * Path resolution is lazy — `homedir()` is called on every operation rather
+ * than cached at module load. That lets tests redirect via `process.env.HOME`
+ * and use a tmp directory without touching the real `~/.cordyceps/`.
  */
 
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, renameSync, chmodSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-
-const CORDYCEPS_DIR = join(homedir(), ".cordyceps");
-const INSTANCES_DIR = join(CORDYCEPS_DIR, "instances");
 
 export interface InstanceRecord {
   pid: number;
@@ -25,13 +26,17 @@ export interface InstanceRecord {
   version: string;
 }
 
+function cordycepsDir(): string {
+  return join(homedir(), ".cordyceps");
+}
+
 export function instancesDir(): string {
-  return INSTANCES_DIR;
+  return join(cordycepsDir(), "instances");
 }
 
 /** Ensure ~/.cordyceps/ and instances/ exist with 0700 mode. */
 export function ensureInstanceDir(): void {
-  for (const dir of [CORDYCEPS_DIR, INSTANCES_DIR]) {
+  for (const dir of [cordycepsDir(), instancesDir()]) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     try { chmodSync(dir, 0o700); } catch { /* may fail on some FS — non-fatal */ }
   }
@@ -40,7 +45,7 @@ export function ensureInstanceDir(): void {
 /** Write our instance record atomically. Returns the path written. */
 export function writeInstance(record: InstanceRecord): string {
   ensureInstanceDir();
-  const path = join(INSTANCES_DIR, `${record.pid}.json`);
+  const path = join(instancesDir(), `${record.pid}.json`);
   const tmp = `${path}.tmp.${process.pid}`;
 
   writeFileSync(tmp, JSON.stringify(record, null, 2), { mode: 0o600 });
@@ -51,7 +56,7 @@ export function writeInstance(record: InstanceRecord): string {
 
 /** Remove our instance record. */
 export function removeInstance(pid: number = process.pid): void {
-  const path = join(INSTANCES_DIR, `${pid}.json`);
+  const path = join(instancesDir(), `${pid}.json`);
   try { unlinkSync(path); } catch { /* already gone */ }
 }
 
@@ -67,14 +72,15 @@ export function isPidAlive(pid: number): boolean {
 
 /** Read all instance records. Cleans up stale ones (dead PIDs) along the way. */
 export function listInstances(): InstanceRecord[] {
-  if (!existsSync(INSTANCES_DIR)) return [];
+  const dir = instancesDir();
+  if (!existsSync(dir)) return [];
   const out: InstanceRecord[] = [];
   let files: string[];
-  try { files = readdirSync(INSTANCES_DIR); } catch { return []; }
+  try { files = readdirSync(dir); } catch { return []; }
 
   for (const file of files) {
     if (!file.endsWith(".json")) continue;
-    const path = join(INSTANCES_DIR, file);
+    const path = join(dir, file);
     try {
       const raw = readFileSync(path, "utf-8");
       const record = JSON.parse(raw) as InstanceRecord;

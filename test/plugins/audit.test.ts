@@ -86,22 +86,52 @@ describe("audit plugin", () => {
     await destroyPlugin(loaded, { rpc, logger });
   });
 
-  it("--no-audit skips init (no JSONL written)", async () => {
+  it("default (no opt-in) skips init — no JSONL written", async () => {
     const { bus, drivers, manager, rpc } = setup();
     const loaded = await loadPlugin(auditPlugin, {
       bus, agents: manager, drivers, rpc, logger,
       cwd: process.cwd(),
-      pluginConfigs: { audit: { enabled: true, settings: { auditDir: tmpDir } } },
-      flagOverrides: { audit: { "--no-audit": true } },
+      pluginConfigs: {},  // no settings, no flag → audit stays off
     });
-    const agent = await manager.spawn("fake", { id: "no-audit" });
+    const agent = await manager.spawn("fake", { id: "default-off" });
     await new Promise((r) => setTimeout(r, 100));
     await agent.kill();
     await new Promise((r) => setTimeout(r, 100));
-    // Audit dir was created by mkdtempSync in setup() but no JSONL should be written
+    // tmpDir was created by setup but no JSONL should land in it
     const jsonl = readdirSync(tmpDir).filter((f) => f.endsWith(".jsonl"));
     expect(jsonl).toHaveLength(0);
     await destroyPlugin(loaded, { rpc, logger });
+  });
+
+  it("--audit flag enables logging into the default directory", async () => {
+    const { bus, drivers, manager, rpc } = setup();
+    // setup() created tmpDir; redirect HOME so the plugin's default audit
+    // dir lands inside it instead of the real ~/.cordyceps/audit/.
+    const originalHome = process.env.HOME;
+    process.env.HOME = tmpDir;
+    try {
+      const loaded = await loadPlugin(auditPlugin, {
+        bus, agents: manager, drivers, rpc, logger,
+        cwd: process.cwd(),
+        pluginConfigs: {},
+        flagOverrides: { audit: { "--audit": true } },
+      });
+
+      const agent = await manager.spawn("fake", { id: "flag-on" });
+      await new Promise((r) => setTimeout(r, 200));
+      await agent.submit("hello", { timeoutMs: 3000 });
+      await agent.kill();
+      await new Promise((r) => setTimeout(r, 100));
+
+      const auditDir = join(tmpDir, ".cordyceps", "audit");
+      expect(existsSync(auditDir)).toBe(true);
+      const files = readdirSync(auditDir).filter((f) => f.endsWith(".jsonl"));
+      expect(files.length).toBeGreaterThan(0);
+
+      await destroyPlugin(loaded, { rpc, logger });
+    } finally {
+      process.env.HOME = originalHome;
+    }
   });
 
   it("plugin disabled in config skips entirely", async () => {
