@@ -7,12 +7,6 @@
 
 **Local-first agent harness.** A daemon that spawns and drives PTY-based CLI coding agents — Claude Code, Codex, Gemini, Ollama — through a single JSON-RPC 2.0 control plane. Every primitive a human invokes from the shell (spawn, submit, interrupt, approve, kill) is reachable over the same API a manager LLM uses to drive a fleet of peers.
 
-<!--
-  Demo asset placeholder. Recorded via asciinema and rendered to an inline
-  SVG with svg-term-cli; see assets/demo.cast for the source recording.
-  Replace this comment with `![demo](assets/demo.svg)` once the cast lands.
--->
-
 ## Why this exists
 
 Most agent frameworks assume one model, one task, one process. Real agentic
@@ -253,6 +247,9 @@ hot-load / unload practical without a registry refactor.
 pnpm test          # vitest, full suite green
 pnpm build         # tsc clean
 ```
+
+The repo uses pnpm; `npm test` and `npm run build` work too if you don't
+have pnpm installed.
 
 When a CLI release shifts glyph spacing, mode-line shape, or spinner
 frames, the fixture-replay harness in `test/fixtures/` catches the drift

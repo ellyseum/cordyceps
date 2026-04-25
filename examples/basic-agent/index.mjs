@@ -33,6 +33,7 @@ const instances = files
 if (instances.length === 0) {
   throw new Error("no daemon running — run `cordy daemon start`");
 }
+// Newest daemon wins — matches the discovery rule used by `cordy` itself.
 instances.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 const inst = instances[0];
 

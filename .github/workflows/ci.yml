@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['20', '22']
+        node: ['20', '22', '24']
     steps:
       - uses: actions/checkout@v4
 
@@ -37,12 +37,17 @@ jobs:
 
       - name: Verify package tarball contents
         run: |
-          npm pack --dry-run --json > /tmp/pack.json
+          # Same publish path the release workflow uses (pnpm publish), so
+          # the tarball we inspect here matches what users actually install.
+          pnpm pack --pack-destination /tmp >/dev/null
+          tar -tzf /tmp/ellyseum-cordyceps-*.tgz > /tmp/files.txt
           node -e "
-            const data = JSON.parse(require('fs').readFileSync('/tmp/pack.json', 'utf8'))[0];
-            const names = data.files.map(f => f.path);
+            const fs = require('fs');
+            const names = fs.readFileSync('/tmp/files.txt','utf8')
+              .split('\n').filter(Boolean)
+              .map(l => l.replace(/^package\\//, ''));
             const required = ['LICENSE', 'README.md', 'package.json'];
-            const banned = [/^test\//, /^src\//, /^specs\//, /\.test\.[jt]s$/];
+            const banned = [/^test\\//, /^src\\//, /^specs\\//, /\\.test\\.[jt]s$/];
             for (const r of required) {
               if (!names.includes(r)) { console.error('Missing from tarball:', r); process.exit(1); }
             }

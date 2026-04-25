@@ -7,7 +7,8 @@ project follows [Semantic Versioning](https://semver.org/) once it hits
 
 ## [0.5.0] — 2026-04-28
 
-First public release. Compared to internal 0.4.x:
+First public release. The 0.4.x line was internal-only and never
+published to npm; this is the first version to ship.
 
 ### Added
 - `LICENSE` (MIT) at repo root.
