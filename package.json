@@ -8,12 +8,11 @@
   },
   "files": [
     "dist",
-    "bin",
     "README.md",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20"
+    "node": "^20 || ^22"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -21,11 +20,11 @@
     ]
   },
   "scripts": {
-    "build": "tsc && ([ -f dist/cli/shell.js ] && chmod +x dist/cli/shell.js || true)",
+    "build": "tsc && node -e \"try{require('fs').chmodSync('dist/cli/shell.js',0o755)}catch{}\"",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist"
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "keywords": [
     "claude",
@@ -38,13 +37,29 @@
     "pty",
     "orchestration",
     "json-rpc",
-    "websocket"
+    "websocket",
+    "ai",
+    "llm",
+    "cli"
   ],
   "author": {
-    "name": "Ellyseum",
-    "email": "jocelyn@ellyseum.dev"
+    "name": "Jocelyn Ellyse",
+    "email": "jocelyn@ellyseum.dev",
+    "url": "https://github.com/ellyseum"
   },
   "license": "MIT",
+  "homepage": "https://github.com/ellyseum/cordyceps#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ellyseum/cordyceps.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ellyseum/cordyceps/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
     "node-pty": "^1.1.0",
     "ws": "^8.20.0"
