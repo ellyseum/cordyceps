@@ -127,7 +127,7 @@ function handleHttp(req: IncomingMessage, res: ServerResponse, opts: TransportSe
       version: opts.version,
       pid: process.pid,
       uptime: Math.round((Date.now() - opts.startedAt) / 1000),
-      drivers: opts.dispatcher.listMethods().filter((m) => m.startsWith("drivers.")).length > 0,
+      methods: opts.dispatcher.listMethods().length,
     });
     res.writeHead(200, {
       "Content-Type": "application/json",

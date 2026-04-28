@@ -54,8 +54,10 @@ defense in depth alongside the loopback bind.
 GET http://127.0.0.1:<port>/health
 ```
 
-Returns `{ ok, version, pid, uptime, drivers }` with no auth. Useful for
-process supervisors. No other unauthenticated endpoints exist.
+Returns `{ ok, version, pid, uptime, methods }` with no auth. `methods` is
+the count of registered JSON-RPC methods (a quick liveness signal that
+plugins finished loading). Useful for process supervisors. No other
+unauthenticated endpoints exist.
 
 ## Frame format
 
@@ -142,7 +144,7 @@ A client tunes its allowlist with:
 |--------------------|----------------------------------------------------------|
 | `agent.created`    | `{ id, driverId, mode, cwd, status, profile? }`          |
 | `agent.state`      | `{ agentId, state }` — state machine transition          |
-| `agent.message`    | `{ agentId, message }` — assistant message complete      |
+| `agent.message`    | `{ agentId, message: { text, ts, tokens?, toolsUsed? } }` — assistant message complete |
 | `agent.output`     | `{ agentId, data }` — raw chunk (opt-in)                 |
 | `agent.blocked`    | `{ agentId, blocking }` — awaiting approval / tool use   |
 | `agent.idle`       | `{ agentId, state }` — agent transitioned to idle        |
@@ -159,9 +161,9 @@ server → client   { "jsonrpc": "2.0", "method": "agent.created", "params": { "
 
 client → server   { "jsonrpc": "2.0", "id": 2, "method": "agents.submit", "params": { "id": "demo", "prompt": "what's 2+2?" } }
 server → client   { "jsonrpc": "2.0", "method": "agent.state",   "params": { "agentId": "demo", "state": "busy" } }
-server → client   { "jsonrpc": "2.0", "method": "agent.message", "params": { "agentId": "demo", "message": { "role": "assistant", "text": "4" } } }
+server → client   { "jsonrpc": "2.0", "method": "agent.message", "params": { "agentId": "demo", "message": { "text": "4", "ts": "2026-04-25T13:11:48.501Z" } } }
 server → client   { "jsonrpc": "2.0", "method": "agent.idle",    "params": { "agentId": "demo", "state": "idle" } }
-server → client   { "jsonrpc": "2.0", "id": 2, "result": { "agentId": "demo", "messages": [...], "state": "idle" } }
+server → client   { "jsonrpc": "2.0", "id": 2, "result": { "accepted": true, "message": { "text": "4", "ts": "2026-04-25T13:11:48.501Z" } } }
 
 client → server   { "jsonrpc": "2.0", "id": 3, "method": "agents.kill", "params": { "id": "demo" } }
 server → client   { "jsonrpc": "2.0", "method": "agent.exited", "params": { "agentId": "demo", "exitCode": 0 } }
