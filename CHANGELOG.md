@@ -13,7 +13,7 @@ published to npm; this is the first version to ship.
 ### Added
 - `LICENSE` (MIT) at repo root.
 - Complete `package.json` metadata (`repository`, `bugs`, `homepage`,
-  `publishConfig.provenance`, tightened `engines` to `^20 || ^22`).
+  `publishConfig.provenance`, tightened `engines` to `^20 || ^22 || ^24`).
 - Single source of truth for the package version in `src/core/version.ts`
   (reads `package.json` at module load).
 - `cordy approve` / `cordy reject` CLI wrappers around the existing
@@ -22,7 +22,7 @@ published to npm; this is the first version to ship.
   `docs/`. Self-contained Node.js client example under
   `examples/basic-agent/`.
 - `SECURITY.md` with private disclosure address and threat model summary.
-- GitHub Actions: CI on Node 20 + 22 (`.github/workflows/ci.yml`) and
+- GitHub Actions: CI on Node 20 + 22 + 24 (`.github/workflows/ci.yml`) and
   tag-triggered npm publish with provenance attestations
   (`.github/workflows/release.yml`).
 

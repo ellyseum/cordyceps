@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@ellyseum/cordyceps.svg?style=flat-square)](https://www.npmjs.com/package/@ellyseum/cordyceps)
 [![CI](https://img.shields.io/github/actions/workflow/status/ellyseum/cordyceps/ci.yml?branch=main&style=flat-square&label=ci)](https://github.com/ellyseum/cordyceps/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Node ^20 || ^22](https://img.shields.io/badge/node-%5E20%20%7C%7C%20%5E22-brightgreen.svg?style=flat-square)](package.json)
+[![Node ^20 || ^22 || ^24](https://img.shields.io/badge/node-%5E20%20%7C%7C%20%5E22%20%7C%7C%20%5E24-brightgreen.svg?style=flat-square)](package.json)
 
 **Local-first agent harness.** A daemon that spawns and drives PTY-based CLI coding agents — Claude Code, Codex, Gemini, Ollama — through a single JSON-RPC 2.0 control plane. Every primitive a human invokes from the shell (spawn, submit, interrupt, approve, kill) is reachable over the same API a manager LLM uses to drive a fleet of peers.
 
@@ -46,7 +46,7 @@ For one-shots without a persistent daemon: `cordy --ephemeral spawn claude --nam
 
 ### Prerequisites
 
-- Node `^20 || ^22`.
+- Node `^20 || ^22 || ^24`.
 - `node-pty` is a native module. The npm registry ships prebuilt binaries
   for common Node ABIs; on a system without a matching prebuild, install
   needs Python 3 and a C++ toolchain (`build-essential` on Debian/Ubuntu,
