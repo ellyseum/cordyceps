@@ -3,8 +3,8 @@
  *
  * **Default: disabled.** Audit logging persists agent messages to disk; that
  * surprises users who don't expect it. Opt in explicitly via `--audit` or by
- * passing `--audit-dir <path>`. Programmatic use: set `auditDir` or
- * `enabled: true` in the plugins.audit settings block.
+ * passing `--audit-dir <path>`. Programmatic use: set
+ * `plugins.audit.auditDir` in the global config; presence implies enable.
  *
  * Reference implementation showing both halves of the plugin contract:
  *   - bus subscriptions (auto-cleaned via ctx.subscribe)

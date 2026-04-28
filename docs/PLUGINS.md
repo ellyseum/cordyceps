@@ -153,9 +153,9 @@ runtime plugin alongside your driver and let the registry connect them.
 
 Read `src/plugins/builtin/audit/index.ts` end to end. It demonstrates:
 
-- **Opt-in via flags.** `flags: [{ name: "--audit", … }]`; `init` checks
-  `ctx.config.flags["--audit"] === true || ctx.config.settings.enabled`.
-  Default-off; explicit opt-in.
+- **Opt-in via flags.** `flags: [{ name: "--audit", … }]`; `init` enables
+  logging if `--audit` is present, `--audit-dir <path>` is given, or
+  `plugins.audit.auditDir` is set in config. Default-off.
 - **Method registration.** `audit.tail` returns recent entries from the
   on-disk JSONL.
 - **Bus subscription with auto-cleanup.** `ctx.subscribe(...)` for static
