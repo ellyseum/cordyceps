@@ -3,7 +3,12 @@
 A **driver** adapts one CLI family to cordyceps' agent model. It declares
 which **modes** it supports, exposes a **parser** that walks raw output and
 emits state transitions and messages, and a **control** surface that
-implements `submit` / `interrupt` / `approve` / `reject` / `kill`.
+translates high-level operations (`submit` / `interrupt` / `approve` /
+`reject` / `quit`) into transport-appropriate I/O.
+
+The source of truth for the interface is `src/drivers/api.ts`. This page
+is a guided tour; if it disagrees with the file, the file wins — open an
+issue.
 
 ## Modes
 
@@ -11,42 +16,39 @@ implements `submit` / `interrupt` / `approve` / `reject` / `kill`.
 |---------------|------------------------------------------|------------------------------------------------|
 | `pty`         | node-pty over a real terminal            | The CLI is interactive (TUI, prompts, ANSI)    |
 | `exec`        | one-shot subprocess; stdin / stdout      | The CLI takes one prompt and prints (`--print`, `exec --json`) |
-| `server-http` | HTTP streaming endpoint                  | Already-running daemon (Ollama, llama.cpp)     |
+| `server-http` | HTTP request / streaming response        | Already-running daemon (Ollama, llama.cpp)     |
 | `server-ws`   | WebSocket endpoint                       | Persistent socket (custom server, futures)     |
 
-`pty` is the most expressive (full TUI control: approve, reject,
-mode-switch). `exec` is faster and more reliable for one-shot prompts —
-the council uses `exec` for all reviewers when available. `server-*` modes
+`pty` is the most expressive — full TUI control: approve, reject,
+mode-switch. `exec` is faster and more reliable for one-shot prompts; the
+council uses `exec` for all reviewers when available. `server-*` modes
 keep cordy out of the lifecycle of the underlying server.
 
-A single driver can declare multiple modes; `claude-code` ships both `pty`
-and `exec`. `AgentManager` resolves a `mode` to a runtime factory at spawn
-time.
+A single driver can declare multiple modes; `claude-code` ships both
+`pty` and `exec`. The runtime registry resolves a mode to a controller
+factory at spawn time.
 
 ## The `Driver` interface
 
 ```ts
 interface Driver {
-  readonly id: string;
-  readonly aliases?: readonly string[];
-  readonly label: string;
-  readonly modes: readonly DriverMode[];
-  readonly supportedVersions: string;     // semver range
+  readonly id: string;             // canonical id, e.g. "claude-code"
+  readonly label: string;          // human label
+  readonly version: string;        // driver version, not CLI version
+  readonly aliases?: string[];     // CLI aliases, e.g. ["claude"]
+  readonly modes: DriverMode[];    // in order of preference
+  readonly supportedVersions?: string;  // semver range against the CLI
 
   parser: DriverParser;
   control: DriverControl;
 
-  /** Probe the local environment: is the binary present, what version, capabilities. */
   probe(): Promise<DriverProbe>;
 
-  /** Build the spawn shape for `pty` mode. */
-  buildPtySpawn?(opts: SpawnOpts): { binary: string; args: string[]; env?: Record<string, string> };
-
-  /** Build the spawn shape for `exec` mode. */
-  buildExec?(opts: SpawnOpts): { binary: string; args: string[]; env?: Record<string, string>; promptArg?: number };
-
-  /** server-http / server-ws modes: connection details. */
-  buildServerEndpoint?(opts: SpawnOpts): { url: string; method?: string; headers?: Record<string, string> };
+  // Implement the build*() that matches each declared mode:
+  buildPtySpawn?(profile: DriverProfile): SpawnSpec;
+  buildExec?(profile: DriverProfile, task: ExecTask): ExecSpec;
+  buildServerWs?(profile: DriverProfile): ServerWsSpec;
+  buildServerHttp?(profile: DriverProfile): ServerHttpSpec;
 }
 ```
 
@@ -56,32 +58,79 @@ interface Driver {
 {
   available: boolean;
   version?: string;
-  path?: string;                         // optional — diagnostic only
-  capabilities: Record<string, boolean>; // e.g. { mcpConfig: true, effort: false }
+  capabilities: Record<string, boolean>;  // driver-defined feature flags
   warnings: string[];
-  supportedModes: DriverMode[];
+  supportedModes: DriverMode[];           // narrower than Driver.modes if some can't run here
+  compat?: "supported" | "untested" | "unsupported" | "any";
+}
+```
+
+`compat` is graded against `supportedVersions` by the registry; the
+driver doesn't compute it.
+
+## Spawn / exec / server specs
+
+Every `build*` returns a spec the runtime feeds into the right transport:
+
+```ts
+interface SpawnSpec {        // pty
+  command: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+  cleanEnv?: boolean;
+}
+
+interface ExecSpec {         // exec
+  command: string;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+  stdin?: string;            // optional payload piped into stdin
+  parseOutput: "text" | "json" | "jsonl";  // how the runtime should chunk stdout
+}
+
+interface ServerHttpSpec {   // server-http
+  baseUrl: string;
+  defaultHeaders?: Record<string, string>;
+  submitPath: string;        // path the runtime POSTs prompts to
+}
+
+interface ServerWsSpec {     // server-ws
+  url: string;
+  authHeader?: string;
+  spawnServer?: SpawnSpec;   // if cordy needs to start the server itself
 }
 ```
 
 ## DriverParser
 
-A parser is a state machine. It receives chunks of output via `feed(chunk)`
-and emits `{ state, events, messages }`:
+A parser is a state machine. It returns `{ state, events, messages }`
+each time it's fed a chunk:
 
 ```ts
 interface DriverParser {
-  feed(chunk: string | Buffer): {
-    state: AgentState;                   // 'idle' | 'busy' | 'blocked' | 'exited' | …
-    events: ParserEvent[];               // 'mode-switch', 'spinner-start', 'tool-request', …
-    messages: AssistantMessage[];        // assembled, ready to publish
-  };
-  reset(): void;
+  initialState(): AgentState;
+  feed(chunk: string, state: AgentState): ParseResult;
+}
+
+interface ParseResult {
+  state: AgentState;
+  events: ParserEvent[];      // driver-defined ("tool.call", "mode.changed", …)
+  messages: AssistantMessage[];
+}
+
+interface AssistantMessage {
+  text: string;
+  ts: string;                 // ISO timestamp
+  tokens?: number;
+  toolsUsed?: string[];
 }
 ```
 
 For PTY drivers the input is *raw* — escape sequences, partial writes,
 spinner frames repainted over the same cursor position. The parser walks
-unicode glyphs as state transitions. The Claude parser at
+unicode glyphs as state-machine transitions. The Claude parser at
 `src/drivers/claude/parser.ts` is the worked example:
 
 | Glyph        | Meaning                                |
@@ -103,35 +152,40 @@ the surface is much smaller.
 
 ```ts
 interface DriverControl {
-  submit(input: { write(s: string): void; sendKey(seq: string): void }, prompt: string): Promise<void>;
-  interrupt?(input: …): Promise<void>;
-  approve?(input: …): Promise<void>;
-  reject?(input: …): Promise<void>;
-  switchModel?(input: …, model: string): Promise<void>;
-  switchMode?(input: …, mode: string): Promise<void>;
+  waitForReady(ctx: ControlContext, timeoutMs: number): Promise<void>;
+  submit(ctx: ControlContext, text: string): Promise<void>;
+  interrupt(ctx: ControlContext): Promise<void>;
+  approve(ctx: ControlContext): Promise<void>;
+  reject(ctx: ControlContext): Promise<void>;
+  switchModel?(ctx: ControlContext, model: string): Promise<void>;
+  switchMode?(ctx: ControlContext, mode: string): Promise<void>;
+  quit(ctx: ControlContext): Promise<void>;
+}
+
+interface ControlContext {
+  agentId: string;
+  state: AgentState;
+  profile: DriverProfile;
+  bus: ServiceBus;
+  write(data: string): void;   // raw write — for PTY drivers, raw keystrokes
 }
 ```
 
-Each method receives an opaque `input` whose `write` and `sendKey` operate
-on the underlying transport (PTY for `pty`, stdin for `exec`, HTTP body
-for `server-http`). The control implementation translates the high-level
-operation into the right key sequence or message.
-
-For exec / server modes, several of these are no-ops — there's no
-interrupt for a one-shot subprocess that hasn't started, etc.
+For exec / server modes, several of these reduce to small no-ops or
+HTTP-call equivalents — there's no interrupt for a one-shot subprocess
+that hasn't started, etc.
 
 ## Versions and probes
 
-Every driver declares a `supportedVersions` semver range. `probe()` reads
-the installed CLI version; `gradeCompat()` (in `src/core/semver.ts`) grades
-the result as `tested` / `untested` / `unsupported`. `untested` adds a
-warning to the probe output but doesn't block; `unsupported` blocks
-spawn.
+Every driver declares an optional `supportedVersions` semver range.
+`probe()` reads the installed CLI version; `gradeCompat()` (in
+`src/core/semver.ts`) grades it as `supported` / `untested` /
+`unsupported` / `any`. `untested` adds a warning to the probe output but
+doesn't block; `unsupported` blocks spawn.
 
-Wider ranges are more tolerant of CLI minor bumps but risk parser drift.
-Narrower ranges catch drift early but break first-run for any user on a
-fresh release. We default to the half-open range that covers the latest
-major.
+Wider ranges tolerate CLI minor bumps but risk parser drift. Narrower
+ranges catch drift early but break first-run for any user on a fresh
+release. Default to a half-open range that covers the latest major.
 
 ## Adding a driver
 
@@ -141,7 +195,7 @@ major.
    `tui.ts`, `session.ts`, or model/mode switching.
 3. **Wire.** Register the driver in `src/drivers/index.ts`'s
    `createBuiltinDriverRegistry()`.
-4. **Test.** Add a `test/drivers/<name>/parser.test.ts` and feed it raw
+4. **Test.** Add `test/drivers/<name>/parser.test.ts` and feed it raw
    output samples. For PTY drivers, capture real output via
    `cordy capture` and use it as a fixture under
    `test/fixtures/<driver>/<version>/<scenario>.jsonl`.
@@ -153,8 +207,8 @@ and nothing else has to change.
 
 ## Capturing PTY output for fixtures
 
-When a CLI release shifts spacing, glyph choice, or message envelope, the
-fastest path to a fix is replaying captured output:
+When a CLI release shifts spacing, glyph choice, or message envelope,
+the fastest path to a fix is replaying captured output:
 
 ```bash
 cordy spawn claude --name drift

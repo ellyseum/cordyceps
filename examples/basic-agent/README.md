@@ -27,7 +27,7 @@ You should see, roughly:
 → daemon ws://127.0.0.1:3247/rpc (pid 12345, version 0.5.0)
 → spawned demo (claude-code exec)
 ← pong
-→ final transcript: { ... }
+→ assistant message: pong
 → killed
 ```
 

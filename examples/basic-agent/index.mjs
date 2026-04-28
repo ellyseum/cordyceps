@@ -83,12 +83,15 @@ try {
   });
   console.log(`→ spawned ${info.id} (${info.driverId} ${info.mode})`);
 
+  // agents.submit resolves with { accepted: true, message?: { text, ts, ... } }
+  // — `message` is present when expectMessage !== false (default) and a turn
+  // arrived before the timeout.
   const result = await call("agents.submit", {
     id: "demo",
     prompt: "respond with just the word: pong",
     timeoutMs: 30_000,
   });
-  console.log(`→ final transcript: ${JSON.stringify(result, null, 2)}`);
+  console.log(`→ assistant message: ${result.message?.text ?? "(no message)"}`);
 
   await call("agents.kill", { id: "demo" });
   console.log(`→ killed`);
