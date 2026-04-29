@@ -49,6 +49,13 @@ interface CouncilParams {
   diff?: DiffParams;
   panel?: ReviewerSpec[];
   chair?: ReviewerSpec;
+  /**
+   * Skip the chair-synthesis step. The result still includes per-reviewer
+   * findings (`reviews`); `synthesis` will be empty. Useful when the caller
+   * wants to do its own synthesis (e.g. a host LLM that already has the
+   * reviewer outputs in its context window). Saves a model call.
+   */
+  noChair?: boolean;
   timeoutMs?: number;
   /** Disable chunking (fails hard if file exceeds MAX_CHUNK_BYTES). Default false. */
   noChunk?: boolean;
@@ -775,11 +782,20 @@ const plugin: CordycepsPlugin = {
         };
       }
 
-      const chairOut = await runChair(
-        ctx, chair, reviewId, chairPrompt(targetLabel, reviews, chunks.length), Math.max(timeoutMs, 240_000),
-      );
-      if (chairOut.error) {
-        ctx.logger.warn("council", `chair failed: ${chairOut.error}`);
+      let synthesis = "";
+      let chairError: string | null = null;
+      const noChair = p.noChair === true;
+      if (noChair) {
+        ctx.logger.info("council", `--no-chair set; skipping chair synthesis`);
+      } else {
+        const chairOut = await runChair(
+          ctx, chair, reviewId, chairPrompt(targetLabel, reviews, chunks.length), Math.max(timeoutMs, 240_000),
+        );
+        if (chairOut.error) {
+          ctx.logger.warn("council", `chair failed: ${chairOut.error}`);
+        }
+        synthesis = chairOut.synthesis;
+        chairError = chairOut.error ?? null;
       }
 
       const durationMs = Date.now() - startedAt;
@@ -792,8 +808,9 @@ const plugin: CordycepsPlugin = {
         panel,
         chunks: chunks.length,
         reviews,
-        synthesis: chairOut.synthesis,
-        chairError: chairOut.error ?? null,
+        synthesis,
+        chairError,
+        noChair,
         durationMs,
       };
     });

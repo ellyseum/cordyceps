@@ -9,7 +9,7 @@
  *   review <path>                         File-mode review
  *   diff [--staged] [--scope P] [base]    Diff-mode review (base defaults to HEAD)
  *
- * Shared flags: --panel, --chair, --timeout N, --no-chunk, --json
+ * Shared flags: --panel, --chair, --timeout N, --no-chunk, --no-chair, --json
  */
 
 import { connect } from "../client.js";
@@ -32,6 +32,8 @@ interface CouncilResult {
   }>;
   synthesis: string;
   chairError?: string | null;
+  /** True when the chair was deliberately skipped (--no-chair); distinguishes from silent chair failure. */
+  noChair?: boolean;
   durationMs: number;
 }
 
@@ -41,6 +43,7 @@ interface Flags {
   timeoutMs?: number;
   asJson: boolean;
   noChunk: boolean;
+  noChair: boolean;
   positional: string[];
   staged: boolean;
   scope?: string;
@@ -49,7 +52,7 @@ interface Flags {
 }
 
 function parseFlags(args: string[]): Flags {
-  const f: Flags = { asJson: false, noChunk: false, positional: [], staged: false, inline: false };
+  const f: Flags = { asJson: false, noChunk: false, noChair: false, positional: [], staged: false, inline: false };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--panel" && args[i + 1]) f.panel = args[++i];
@@ -65,6 +68,7 @@ function parseFlags(args: string[]): Flags {
     else if (a === "--scope" && args[i + 1]) f.scope = args[++i];
     else if (a === "--json") f.asJson = true;
     else if (a === "--no-chunk") f.noChunk = true;
+    else if (a === "--no-chair") f.noChair = true;
     else if (a === "--staged") f.staged = true;
     else if (a === "--inline") f.inline = true;
     else f.positional.push(a);
@@ -87,10 +91,19 @@ function printSummary(result: CouncilResult, asJson: boolean) {
     const status = r.error ? `ERROR: ${r.error}` : `${(r.findings ?? []).length} findings`;
     process.stderr.write(`  ${(r.name + chunkTag).padEnd(60)} ${status}\n`);
   }
-  process.stderr.write(`\n--- Chair synthesis ---\n`);
-  process.stdout.write(result.synthesis + "\n");
-  if (result.chairError) {
-    process.stderr.write(`\n⚠ chair error: ${result.chairError}\n`);
+  if (result.synthesis || result.chairError) {
+    // Chair was attempted (whether produced output or failed). Always
+    // surface chairError — a silent chair crash that drops synthesis to
+    // empty would otherwise be hidden.
+    if (result.synthesis) {
+      process.stderr.write(`\n--- Chair synthesis ---\n`);
+      process.stdout.write(result.synthesis + "\n");
+    }
+    if (result.chairError) {
+      process.stderr.write(`\n⚠ chair error: ${result.chairError}\n`);
+    }
+  } else {
+    process.stderr.write(`\n--- No chair synthesis (--no-chair). Per-reviewer output above; consume via --json. ---\n`);
   }
 }
 
@@ -112,7 +125,7 @@ async function runFileReview(f: Flags): Promise<number> {
 
     const result = await client.call<CouncilResult>(
       "council.review",
-      { path, cwd: process.cwd(), panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk, forceInline: f.inline },
+      { path, cwd: process.cwd(), panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk, noChair: f.noChair, forceInline: f.inline },
       (f.timeoutMs ?? 180_000) * 4 + 120_000,
     );
     printSummary(result, f.asJson);
@@ -140,7 +153,7 @@ async function runDiffReview(f: Flags): Promise<number> {
       "council.review",
       {
         diff: { base, staged: f.staged, scope: f.scope, cwd: process.cwd() },
-        panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk,
+        panel, chair, timeoutMs: f.timeoutMs, noChunk: f.noChunk, noChair: f.noChair,
       },
       (f.timeoutMs ?? 180_000) * 4 + 120_000,
     );
@@ -165,6 +178,7 @@ Shared flags:
   --timeout S       Per-reviewer timeout in seconds (default: 180)
   --inline          Force inline source stuffing even for tool-capable drivers
   --no-chunk        Disable chunking (fails hard if file exceeds single-chunk limit)
+  --no-chair        Skip chair synthesis; return per-reviewer findings only
   --scope PATH      git diff path filter (diff mode only)
   --json            Emit full result as JSON
 `);

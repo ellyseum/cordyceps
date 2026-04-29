@@ -91,6 +91,7 @@ output, and report back. Press Ctrl+C to interrupt.
 ```bash
 cordy council review src/core/bus.ts
 cordy council review src/core/bus.ts --panel claude,codex,gemini --chair codex --json
+cordy council review src/core/bus.ts --no-chair --json   # synthesize yourself
 cordy council diff                              # uncommitted changes vs HEAD
 cordy council diff --staged                     # only staged changes
 cordy council diff main..feature --scope src/   # branch comparison, scoped
@@ -101,6 +102,12 @@ N reviewers from different driver families run in parallel, each in a silo
 findings into a prioritized markdown verdict. The whole point is
 heterogeneous training lineages — intra-family ensembles correlate their
 blind spots; inter-family councils don't.
+
+`--no-chair` (0.5.2+) skips the chair-spawn step and returns
+per-reviewer findings only. Useful when an LLM caller (e.g. a Claude
+Code session driving cordy) wants to synthesize the panel's output
+itself using full conversation context, instead of paying for a
+separate chair model.
 
 `review` operates on a whole file; `diff` reviews the changes shown by `git
 diff` (with `--no-ext-diff --no-textconv --end-of-options` for hostile-repo

@@ -61,9 +61,9 @@ Manager:
                                       Spawn a cordy-manager agent wired with MCP delegation
 
 Council:
-  cordy council review <path> [--panel ...] [--chair ...] [--timeout N] [--no-chunk] [--json]
+  cordy council review <path> [--panel ...] [--chair ...] [--no-chair] [--timeout N] [--no-chunk] [--json]
                                       Review a single file
-  cordy council diff [base] [--staged] [--scope PATH]
+  cordy council diff [base] [--staged] [--scope PATH] [--no-chair] [--json]
                                       Review uncommitted/staged changes (default base: HEAD)
 
 Ephemeral:

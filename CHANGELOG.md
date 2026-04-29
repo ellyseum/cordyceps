@@ -5,6 +5,15 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project follows [Semantic Versioning](https://semver.org/) once it hits
 `1.0.0`. Pre-1.0 minors may include breaking changes (called out below).
 
+## [0.5.2] — 2026-04-29
+
+### Added
+- `cordy council review/diff --no-chair` — skip the chair-synthesis
+  step. Per-reviewer findings still returned; `synthesis` is empty.
+  Saves a model call when the caller (e.g. a host LLM with all the
+  reviewer outputs already in its context) wants to synthesize itself.
+- `council.review` RPC method accepts a new `noChair: boolean` param.
+
 ## [0.5.1] — 2026-04-29
 
 ### Added
