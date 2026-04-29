@@ -5,6 +5,23 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project follows [Semantic Versioning](https://semver.org/) once it hits
 `1.0.0`. Pre-1.0 minors may include breaking changes (called out below).
 
+## [0.5.5] — 2026-04-29
+
+### Fixed
+- `cordy council review/diff` now actually pins Claude reviewers to
+  exec mode when `--panel claude:opus` (etc.) is used. The 0.5.3 fix
+  only changed `defaultModeFor` (a heuristic for inline-vs-tool-driven
+  routing), but the AgentManager's `chooseMode` still defaulted to
+  `driver.modes[0]` — which is `pty` for Claude — so reviewers
+  continued spawning under PTY and parse-failed silently in
+  real-world panels. The mode is now set explicitly on the spawn
+  profile per reviewer (and chair) when the caller didn't specify
+  one.
+- New helper `resolveCouncilMode(spec)` infers `mode=pty` for Claude
+  when the caller passed PTY-only profile fields (`resume`,
+  `continue`, `sessionId`, `isolateConfig`) without an explicit
+  mode. Without this, buildExec would silently drop those fields.
+
 ## [0.5.4] — 2026-04-29
 
 ### CI/release

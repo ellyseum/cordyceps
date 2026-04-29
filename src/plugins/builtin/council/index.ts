@@ -136,6 +136,37 @@ function driverSupportsTools(driverId: string, mode: string): boolean {
  * actually spawning (probe-free heuristic — the real mode is picked by
  * AgentManager at spawn time based on registered runtimes ∩ probe).
  */
+/**
+ * Claude profile fields that only work in PTY mode (buildExec drops them
+ * silently). If a caller passes any of these without an explicit
+ * `mode: "pty"`, we infer they meant PTY and don't auto-flip them to exec.
+ *
+ * Source of truth: src/drivers/claude/driver.ts:buildExec — these are the
+ * fields explicitly omitted from the exec arg list.
+ */
+const CLAUDE_PTY_ONLY_FIELDS = ["resume", "continue", "sessionId", "isolateConfig"] as const;
+
+function profileHasClaudePtyOnlyField(profile: Record<string, unknown> | undefined): boolean {
+  if (!profile) return false;
+  return CLAUDE_PTY_ONLY_FIELDS.some((k) => profile[k] !== undefined);
+}
+
+/**
+ * Resolve the mode council will spawn this reviewer/chair under, given a
+ * spec that didn't explicitly set profile.mode. Defaults to defaultModeFor(),
+ * but for claude specifically we honor PTY-only profile fields by inferring
+ * mode=pty when any are present (otherwise buildExec would silently drop
+ * them and the caller's session/config-isolation intent would be lost).
+ */
+function resolveCouncilMode(spec: ReviewerSpec): string {
+  if (spec.profile?.mode) return spec.profile.mode as string;
+  if ((spec.driver === "claude" || spec.driver === "claude-code")
+      && profileHasClaudePtyOnlyField(spec.profile as Record<string, unknown> | undefined)) {
+    return "pty";
+  }
+  return defaultModeFor(spec.driver);
+}
+
 function defaultModeFor(driverId: string): string {
   switch (driverId) {
     case "claude":
@@ -408,9 +439,22 @@ async function runOneReviewer(
   let agent: AgentRuntime | undefined;
   let actualId: string | undefined;
   try {
+    // Pin council's preferred mode per driver UNLESS the caller explicitly
+    // set one. registry.chooseMode falls back to driver.modes[0] when no
+    // mode is preferred, and claude's modes=["pty","exec"] puts PTY first.
+    // Without this override, council reviewers spawn under PTY and the
+    // headless review prompt produces unparseable TUI output.
+    //
+    // resolveCouncilMode also infers mode=pty when the caller passed a
+    // PTY-only Claude field (resume/continue/sessionId/isolateConfig)
+    // without an explicit mode — otherwise buildExec drops those silently.
+    const profileWithMode = {
+      ...(spec.profile ?? {}),
+      mode: resolveCouncilMode(spec),
+    };
     const info = await ctx.agents.spawn(spec.driver, {
       id: name,
-      profile: spec.profile,
+      profile: profileWithMode,
     });
     actualId = info.id;
     agent = ctx.agents.get(actualId);
@@ -483,9 +527,15 @@ async function runChair(
   let agent: AgentRuntime | undefined;
   let actualId: string | undefined;
   try {
+    // See runOneReviewer for why we override profile.mode — same reasoning,
+    // including the PTY-only-field inference for Claude profiles.
+    const profileWithMode = {
+      ...(spec.profile ?? {}),
+      mode: resolveCouncilMode(spec),
+    };
     const info = await ctx.agents.spawn(spec.driver, {
       id: name,
-      profile: spec.profile,
+      profile: profileWithMode,
     });
     actualId = info.id;
     agent = ctx.agents.get(actualId);
@@ -823,6 +873,6 @@ const plugin: CordycepsPlugin = {
 export { parsePanelArg, parseReviewerSpec };
 
 /** Test-only exports. Not part of the public plugin surface. */
-export const __testables__ = { chunkByLines, extractFindings, driverSupportsTools, defaultModeFor };
+export const __testables__ = { chunkByLines, extractFindings, driverSupportsTools, defaultModeFor, resolveCouncilMode };
 
 export default plugin;

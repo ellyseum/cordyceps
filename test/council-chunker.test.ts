@@ -106,3 +106,48 @@ describe("council driver capability routing", () => {
     expect(defaultModeFor("unknown-driver")).toBe("exec"); // conservative default
   });
 });
+
+describe("council mode resolution (0.5.5+)", () => {
+  const { resolveCouncilMode } = __testables__;
+
+  it("uses defaultModeFor when no profile is set", () => {
+    expect(resolveCouncilMode({ driver: "claude" })).toBe("exec");
+    expect(resolveCouncilMode({ driver: "codex" })).toBe("exec");
+    expect(resolveCouncilMode({ driver: "ollama" })).toBe("server-http");
+  });
+
+  it("respects explicit profile.mode override", () => {
+    expect(resolveCouncilMode({ driver: "claude", profile: { mode: "pty" } })).toBe("pty");
+    expect(resolveCouncilMode({ driver: "claude", profile: { mode: "exec" } })).toBe("exec");
+  });
+
+  it("infers pty for claude when PTY-only profile fields are present", () => {
+    // resume / continue / sessionId / isolateConfig only work in PTY mode —
+    // buildExec drops them silently. Council infers mode=pty so the caller's
+    // intent isn't lost.
+    expect(resolveCouncilMode({ driver: "claude", profile: { resume: "abc" } })).toBe("pty");
+    expect(resolveCouncilMode({ driver: "claude", profile: { continue: true } })).toBe("pty");
+    expect(resolveCouncilMode({ driver: "claude", profile: { sessionId: "abc-123" } })).toBe("pty");
+    expect(resolveCouncilMode({ driver: "claude", profile: { isolateConfig: true } })).toBe("pty");
+    expect(resolveCouncilMode({ driver: "claude-code", profile: { sessionId: "abc" } })).toBe("pty");
+  });
+
+  it("PTY-only field inference is claude-specific (codex/gemini stay on default)", () => {
+    expect(resolveCouncilMode({ driver: "codex", profile: { sessionId: "abc" } })).toBe("exec");
+    expect(resolveCouncilMode({ driver: "gemini", profile: { resume: "abc" } })).toBe("exec");
+  });
+
+  it("explicit mode beats PTY-only field inference", () => {
+    // Caller knows what they're doing — even if they passed sessionId, an
+    // explicit mode=exec override wins (their problem if buildExec drops it).
+    expect(resolveCouncilMode({
+      driver: "claude",
+      profile: { mode: "exec", sessionId: "abc" },
+    })).toBe("exec");
+  });
+
+  it("non-PTY-only claude fields keep the default exec mode", () => {
+    expect(resolveCouncilMode({ driver: "claude", profile: { model: "opus" } })).toBe("exec");
+    expect(resolveCouncilMode({ driver: "claude", profile: { effort: "high" } })).toBe("exec");
+  });
+});
