@@ -42,5 +42,12 @@ jobs:
             exit 1
           fi
 
+      # Use npm (not pnpm) for the publish step. npm 11.5+ handles the
+      # trusted-publisher OIDC handshake (exchange GH id-token for a
+      # short-lived publish token); pnpm publish does not. We upgrade
+      # npm explicitly to be sure we get a version with that support.
+      - name: Upgrade npm to a version with OIDC trusted-publisher support
+        run: npm install -g npm@latest
+
       - name: Publish
-        run: pnpm publish --access public --provenance --no-git-checks
+        run: npm publish --access public --provenance
