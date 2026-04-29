@@ -82,10 +82,12 @@ describe("council driver capability routing", () => {
     expect(driverSupportsTools("ollama", "server-http")).toBe(false);
   });
 
-  it("Claude in exec mode (hypothetical) does NOT have tools", () => {
-    // Defensive: if someone writes a buildExec for Claude later, don't assume
-    // the exec invocation gives tool access by default.
-    expect(driverSupportsTools("claude-code", "exec")).toBe(false);
+  it("Claude in exec mode HAS tools (claude --print runs full agent)", () => {
+    // 0.5.3+: Claude exec mode runs the full Claude Code agent with file-tool
+    // access, so council reviewers in exec mode can read the target via their
+    // own tools rather than getting an inlined prompt.
+    expect(driverSupportsTools("claude-code", "exec")).toBe(true);
+    expect(driverSupportsTools("claude", "exec")).toBe(true);
   });
 
   it("unknown driver does NOT have tools (fail-safe)", () => {
@@ -93,8 +95,11 @@ describe("council driver capability routing", () => {
   });
 
   it("defaultModeFor picks the builtin default for each driver", () => {
-    expect(defaultModeFor("claude")).toBe("pty");
-    expect(defaultModeFor("claude-code")).toBe("pty");
+    // 0.5.3: Claude defaults to exec for council use. PTY remains experimental
+    // for headless review work — TUI output parsing was unreliable and
+    // silently dropped reviewer findings in real-world panels.
+    expect(defaultModeFor("claude")).toBe("exec");
+    expect(defaultModeFor("claude-code")).toBe("exec");
     expect(defaultModeFor("codex")).toBe("exec");
     expect(defaultModeFor("gemini")).toBe("exec");
     expect(defaultModeFor("ollama")).toBe("server-http");

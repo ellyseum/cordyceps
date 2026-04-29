@@ -5,6 +5,20 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project follows [Semantic Versioning](https://semver.org/) once it hits
 `1.0.0`. Pre-1.0 minors may include breaking changes (called out below).
 
+## [0.5.3] — 2026-04-29
+
+### Changed
+- `cordy council review/diff` now defaults Claude reviewers to `exec`
+  mode instead of `pty`. PTY mode is still supported for interactive
+  spawns but is experimental for headless review use — TUI output
+  parsing dropped reviewer findings silently in real-world panels.
+  Users who explicitly want PTY can pass `--panel claude:opus` with a
+  spec-level `profile.mode = "pty"` override.
+- `driverSupportsTools` now treats Claude in `exec` mode as
+  tool-capable (Claude `--print` runs the full agent with tool access),
+  so Claude exec reviewers get the path-only prompt and read the file
+  via their own tools rather than being inlined.
+
 ## [0.5.2] — 2026-04-29
 
 ### Added

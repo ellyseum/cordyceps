@@ -126,7 +126,7 @@ const DEFAULT_CHAIR: ReviewerSpec = { driver: "codex" };
  */
 function driverSupportsTools(driverId: string, mode: string): boolean {
   if (mode === "pty" && (driverId === "claude-code" || driverId === "claude")) return true;
-  if (mode === "exec" && (driverId === "codex" || driverId === "gemini")) return true;
+  if (mode === "exec" && (driverId === "codex" || driverId === "gemini" || driverId === "claude-code" || driverId === "claude")) return true;
   return false;
 }
 
@@ -140,7 +140,7 @@ function defaultModeFor(driverId: string): string {
   switch (driverId) {
     case "claude":
     case "claude-code":
-      return "pty";
+      return "exec";
     case "codex":
     case "cx":
     case "gemini":
