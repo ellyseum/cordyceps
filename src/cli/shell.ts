@@ -69,6 +69,9 @@ Council:
 Ephemeral:
   cordy --ephemeral <command...>      Spin up a transient daemon for one command
 
+Version:
+  cordy --version                     Print version
+
 Help:
   cordy help                          Show this message
 `;
@@ -78,6 +81,12 @@ async function main(): Promise<void> {
 
   if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
     process.stdout.write(HELP);
+    return;
+  }
+
+  if (args[0] === "--version" || args[0] === "-v" || args[0] === "version") {
+    const { VERSION } = await import("../core/version.js");
+    process.stdout.write(`${VERSION}\n`);
     return;
   }
 

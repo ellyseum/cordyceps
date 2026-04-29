@@ -5,6 +5,20 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project follows [Semantic Versioning](https://semver.org/) once it hits
 `1.0.0`. Pre-1.0 minors may include breaking changes (called out below).
 
+## [0.5.1] — 2026-04-29
+
+### Added
+- `cordy --version` / `cordy -v` / `cordy version` — print the package
+  version. Useful for tooling that wants to gate on cordy capabilities
+  without parsing `cordy doctor`.
+
+### Docs
+- README: new "Use from Claude Code" section pointing at the
+  [`claude-cordyceps`](https://github.com/ellyseum/claude-cordyceps)
+  plugin as the recommended way to drive cordy from a Claude Code
+  session. The MCP-bridge section is now positioned as the lower-level
+  substrate the plugin builds on.
+
 ## [0.5.0] — 2026-04-28
 
 First public release. The 0.4.x line was internal-only and never

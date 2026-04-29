@@ -108,15 +108,36 @@ safety). Tool-capable drivers (Claude PTY, Codex exec, Gemini exec) get a
 path-only prompt and read the file themselves; tool-less drivers fall back
 to inline mode with auto-chunking at ~30KB.
 
+## Use from Claude Code
+
+The recommended way to drive cordy from a Claude Code session is the
+[`claude-cordyceps`](https://github.com/ellyseum/claude-cordyceps)
+plugin. It teaches Claude how to map natural-language asks
+("consult peers on src/foo.ts", "spawn council", "brainstorm with
+multiple LLMs", "ask Codex about this design") to the right `cordy`
+invocation, and ships a SessionStart hook that detects which drivers
+are reachable on the current machine.
+
+After installing cordy globally as above:
+
+```text
+/plugin marketplace add ellyseum/claude-cordyceps
+/plugin install claude-cordyceps
+```
+
+Then trigger via natural language or the `/cordy <ask>` slash command.
+See the plugin's README for the full setup and trigger phrase list.
+
 ## MCP bridge — expose cordy to another agent
 
 > **Experimental.** The bridge currently speaks line-delimited JSON-RPC,
 > which is what Claude Code's MCP loader accepts. Stricter MCP clients may
 > reject the framing; full MCP stdio framing is tracked for a future release.
 
-Add `cordy mcp-stdio` to a Claude Code MCP config, and the agent gains
-delegated authority to spawn peers and drive them via tool calls
-(`cordy_agents_spawn`, `cordy_agents_submit`, `cordy_drivers_list`, …):
+For lower-level integration (no plugin), add `cordy mcp-stdio` to a
+Claude Code MCP config — the agent gains delegated authority to spawn
+peers and drive them via tool calls (`cordy_agents_spawn`,
+`cordy_agents_submit`, `cordy_drivers_list`, …):
 
 ```jsonc
 {
@@ -126,8 +147,9 @@ delegated authority to spawn peers and drive them via tool calls
 }
 ```
 
-This is the substrate for manager-agent patterns from inside another LLM
-session.
+This is the substrate the `claude-cordyceps` plugin builds on, and is
+the path to take if you want raw tool calls instead of the plugin's
+opinionated skill body.
 
 ## Drivers
 
