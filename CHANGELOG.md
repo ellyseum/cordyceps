@@ -5,6 +5,16 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project follows [Semantic Versioning](https://semver.org/) once it hits
 `1.0.0`. Pre-1.0 minors may include breaking changes (called out below).
 
+## [0.5.4] — 2026-04-29
+
+### CI/release
+- Repo flipped public; npm Trusted Publisher (GitHub Actions OIDC)
+  configured for `@ellyseum/cordyceps`.
+- `release.yml` no longer references `NPM_TOKEN` — auth is now via
+  short-lived OIDC tokens minted per workflow run. Provenance
+  attestations are now signed and posted to the public transparency
+  log on every tag-triggered release.
+
 ## [0.5.3] — 2026-04-29
 
 ### Changed
